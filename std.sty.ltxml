@@ -1,0 +1,40 @@
+# -*- mode: Perl -*-
+# /=====================================================================\ #
+# |  std                                                           | #
+# | Implementation for LaTeXML                                          | #
+# |=====================================================================| #
+# | Part of LaTeXML:                                                    | #
+# |  Public domain software, produced as part of work done by the       | #
+# |  United States Government & not subject to copyright in the US.     | #
+# |---------------------------------------------------------------------| #
+# | Bruce Miller <bruce.miller@nist.gov>                        #_#     | #
+# | http://dlmf.nist.gov/LaTeXML/                              (o o)    | #
+# \=========================================================ooo==U==ooo=/ #
+package LaTeXML::Package::Pool;
+use strict;
+use warnings;
+use LaTeXML::Package;
+
+
+DefMacro('\Cpp', 'C++');
+
+DefMacro('\rSec Number [] Plain', sub {
+    my $depth = ToString($_[1]);
+    my $ref = ToString($_[2]);
+    my $name = ToString($_[3]);
+
+    my @res = Tokenize(qq(\\setcounter{SectionDepth}{$depth}
+                             \\addtocounter{SectionDepth}{\\value{SectionDepthBase}}
+                             \\Sec{\\arabic{SectionDepth}}[$ref]{$name}));
+    if($name =~ m/Header\s+\\tcode\{<(\w+)\>}\s+synopsis/) {
+	push(@res, Invocation(T_CS('\header'), $1));
+    }
+    return @res;
+},
+
+ locked => 1);
+
+DefConstructor('\header{}', '<ltx:note role="header">#1</ltx:note>', mode => 'text');
+#======================================================================
+1;
+
