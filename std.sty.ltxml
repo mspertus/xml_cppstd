@@ -15,9 +15,13 @@ use strict;
 use warnings;
 use LaTeXML::Package;
 
+LoadPool('LaTeX');
+RequirePackage('listings');
 
 DefMacro('\Cpp', 'C++');
-
+DefMacro('\Cpp', 'D++');
+NewCounter('InHeader');
+    
 DefMacro('\rSec Number [] Plain', sub {
     my $depth = ToString($_[1]);
     my $ref = ToString($_[2]);
@@ -27,7 +31,9 @@ DefMacro('\rSec Number [] Plain', sub {
                              \\addtocounter{SectionDepth}{\\value{SectionDepthBase}}
                              \\Sec{\\arabic{SectionDepth}}[$ref]{$name}));
     if($name =~ m/Header\s+\\tcode\{<(\w+)\>}\s+synopsis/) {
-	push(@res, Invocation(T_CS('\header'), $1));
+	push(@res, (Tokenize('\setcounter{InHeader}{1}'), Invocation(T_CS('\header'), $1)));
+    } else {
+	push(@res, (Tokenize('\setcounter{InHeader}{0}')));
     }
     return @res;
 },
@@ -35,6 +41,25 @@ DefMacro('\rSec Number [] Plain', sub {
  locked => 1);
 
 DefConstructor('\header{}', '<ltx:note role="header">#1</ltx:note>', mode => 'text');
+
+DefConstructor('\@@listings@block {} {}',
+"<ltx:note role='listing'></ltx:note><ltx:listing class='ltx_lstlisting' data='#data' datamimetype='#datamimetype' dataencoding='#dataencoding' foo='bar'>#2</ltx:listing>",
+    afterDigest => sub {
+    my ($stomach, $whatsit) = @_;
+    # Could have some options about encoding?
+    my $data_key      = 'LISTINGS_DATA_' . ToString($whatsit->getArg(1));
+    my $listings_data = LookupValue($data_key);
+    if (is_utf8($listings_data)) {
+      $listings_data = encode('UTF-8', $listings_data);
+    }
+    # my $data = encode_base64($listings_data);
+    # my $data = ToString(Expand(T_CS('\thechapter')));
+    my $data = CounterValue('InHeader')->valueOf;
+    print $data;
+    $whatsit->setProperties(data => $data, datamimetype => 'text/plain', dataencoding => 'base64'); },
+  locked => 1);
+
+print $STATE->lookupMeaning(T_CS('\@@listings@block'));
 #======================================================================
 1;
 
