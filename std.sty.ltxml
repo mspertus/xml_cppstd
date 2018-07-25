@@ -14,6 +14,7 @@ package LaTeXML::Package::Pool;
 use strict;
 use warnings;
 use LaTeXML::Package;
+use Regexp::Common;
 
 LoadPool('LaTeX');
 RequirePackage('listings');
@@ -43,23 +44,50 @@ DefMacro('\rSec Number [] Plain', sub {
 DefConstructor('\header{}', '<ltx:note role="header">#1</ltx:note>', mode => 'text');
 
 DefConstructor('\@@listings@block {} {}',
-"<ltx:note role='listing'></ltx:note><ltx:listing class='ltx_lstlisting' data='#data' datamimetype='#datamimetype' dataencoding='#dataencoding' foo='bar'>#2</ltx:listing>",
+	       sub {
+		   my ($document, $index, $content, %props) = @_;
+		   my $inHeader = $props{inHeader};
+
+		   if($inHeader) {
+		       my $data_key      = 'LISTINGS_DATA_' . ToString($index);
+		       my $listings_data = LookupValue($data_key);
+		       $document->openElement('ltx:note', role => 'synopsis');
+		       $document->closeElement('ltx:note');
+		   }
+		   $document->insertElement('ltx:listing',
+					    $content,
+					    data => $props{data},
+					    datamimetype => $props{datamimetype},
+					    dataencoding => $props{dataencoding}); },
+	       afterDigest => sub {
+		   my ($stomach, $whatsit) = @_;
+		   # Could have some options about encoding?
+		   my $data_key      = 'LISTINGS_DATA_' . ToString($whatsit->getArg(1));
+		   print "std - $data_key\n";
+		   my $listings_data = LookupValue($data_key);
+		   if (is_utf8($listings_data)) {
+		       $listings_data = encode('UTF-8', $listings_data);
+		   }
+		   my $data = encode_base64($listings_data);
+
+		   my $inHeader = CounterValue('InHeader')->valueOf;
+		   $whatsit->setProperties(data => $data,
+					   inHeader => $inHeader,
+					   datamimetype => 'text/plain',
+					   dataencoding => 'base64'); },
+	       locked => 1);
+
+DefConstructor('\testConst {} {}', 
+    sub {   my ($document, $one, $two, %props) = @_; 
+            $document->absorb(Tokenize($props{foo})); },
+    # '#foo',
     afterDigest => sub {
-    my ($stomach, $whatsit) = @_;
+	my ($stomach, $whatsit) = @_;
+	print $whatsit->getDefinition;
     # Could have some options about encoding?
-    my $data_key      = 'LISTINGS_DATA_' . ToString($whatsit->getArg(1));
-    my $listings_data = LookupValue($data_key);
-    if (is_utf8($listings_data)) {
-      $listings_data = encode('UTF-8', $listings_data);
-    }
-    # my $data = encode_base64($listings_data);
-    # my $data = ToString(Expand(T_CS('\thechapter')));
-    my $data = CounterValue('InHeader')->valueOf;
-    print $data;
-    $whatsit->setProperties(data => $data, datamimetype => 'text/plain', dataencoding => 'base64'); },
+    $whatsit->setProperties(foo => '<ltx:note></ltx:note>');},
   locked => 1);
 
-print $STATE->lookupMeaning(T_CS('\@@listings@block'));
 #======================================================================
 1;
 
