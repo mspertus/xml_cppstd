@@ -15,6 +15,8 @@ use strict;
 use warnings;
 use LaTeXML::Package;
 use Regexp::Common;
+use Marpa::R2;
+use Data::Dumper;
 
 LoadPool('LaTeX');
 RequirePackage('listings');
@@ -43,6 +45,42 @@ DefMacro('\rSec Number [] Plain', sub {
 
 DefConstructor('\header{}', '<ltx:note role="header">#1</ltx:note>', mode => 'text');
 
+my $dsl = <<'END_OF_DSL';
+:default ::= action => [name,values]
+lexeme default = latm => 1
+
+:start ::= tokens
+tokens ::= token+
+token ::= macro|identifier|punctuation
+macro ::= '#define' identifier (RestOfLine) action => do_macro
+
+identifier ~ [\w]+
+punctuation ~ [^\s\w]+
+
+# See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
+RestOfLine
+  ::=           action => ::undef  # rest is optional
+RestOfLine
+  ::= THE_REST  action => ::undef  # matches anything
+THE_REST ~ [^\n]+
+
+:discard ~ whitespace
+whitespace ~ [\s]+
+
+END_OF_DSL
+
+
+
+
+my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
+my $doc;
+
+
+sub CodeProcess::do_macro {
+    print "doing a macro\n".Dumper(@_);
+    $doc->insertElement('ltx:note', $_[2], role => 'macro');
+}
+
 DefConstructor('\@@listings@block {} {}',
 	       sub {
 		   my ($document, $index, $content, %props) = @_;
@@ -51,7 +89,12 @@ DefConstructor('\@@listings@block {} {}',
 		   if($inHeader) {
 		       my $data_key      = 'LISTINGS_DATA_' . ToString($index);
 		       my $listings_data = LookupValue($data_key);
+		       $doc = $document;
+		       
+		       # print 'Dumping\n'.Dumper($value_ref);
 		       $document->openElement('ltx:note', role => 'synopsis');
+		       my $value_ref = $grammar->parse( \$listings_data, 
+							'CodeProcess');
 		       $document->closeElement('ltx:note');
 		   }
 		   $document->insertElement('ltx:listing',
