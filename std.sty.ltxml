@@ -60,9 +60,10 @@ lexeme default = latm => 1
 
 :start ::= tokens
 tokens ::= token+
-token ::= macro|identifier|punctuation|type_alias
+token ::= macro|identifier|punctuation|type_alias|enum_class
 macro ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
+enum_class ::= 'enum' 'class' identifier ':' (RestOfLine) action => do_enum_class
 
 identifier ~ [\w]+
 punctuation ~ [^\s\w]+
@@ -93,6 +94,10 @@ sub CodeProcess::do_macro {
 
 sub CodeProcess::do_type_alias {
     $doc->insertElement('ltx:note', $_[2], role => 'type alias');
+}
+
+sub CodeProcess::do_enum_class {
+    $doc->insertElement('ltx:note', $_[3], role => 'enum class');
 }
 
 DefConstructor('\@@listings@block {} {}',

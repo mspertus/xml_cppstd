@@ -30,5 +30,11 @@
     </type-alias>
   </xsl:template>
 
+  <xsl:template match="ltx:note[@role='enum class']">
+    <enum-class>
+      <xsl:attribute name="name"><xsl:value-of select="."/></xsl:attribute>
+    </enum-class>
+  </xsl:template>
+
   <xsl:template match="text()|@*"/>
 </xsl:stylesheet>

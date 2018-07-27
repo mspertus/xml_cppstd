@@ -19,10 +19,18 @@ header, type, name
 <xsl:text>
 </xsl:text>
   </xsl:template>
+  
   <xsl:template match="type-alias">
     <xsl:value-of select="ancestor::header/@name"/>,type alias,<xsl:value-of select="@name"/>
 <xsl:text>
 </xsl:text>
   </xsl:template>
-<xsl:template match="text()|@*"/>
+  
+  <xsl:template match="enum-class">
+    <xsl:value-of select="ancestor::header/@name"/>,enum class,<xsl:value-of select="@name"/>
+<xsl:text>
+</xsl:text>
+  </xsl:template>
+  
+  <xsl:template match="text()|@*"/>
 </xsl:stylesheet>
