@@ -60,8 +60,9 @@ lexeme default = latm => 1
 
 :start ::= tokens
 tokens ::= token+
-token ::= macro|identifier|punctuation
+token ::= macro|identifier|punctuation|type_alias
 macro ::= '#define' identifier (RestOfLine) action => do_macro
+type_alias ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 
 identifier ~ [\w]+
 punctuation ~ [^\s\w]+
@@ -88,6 +89,10 @@ my $doc;
 sub CodeProcess::do_macro {
     # print "doing a macro\n".Dumper(@_);
     $doc->insertElement('ltx:note', $_[2], role => 'macro');
+}
+
+sub CodeProcess::do_type_alias {
+    $doc->insertElement('ltx:note', $_[2], role => 'type alias');
 }
 
 DefConstructor('\@@listings@block {} {}',
