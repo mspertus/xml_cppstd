@@ -43,7 +43,16 @@ DefMacro('\rSec Number [] Plain', sub {
 
  locked => 1);
 
-DefConstructor('\header{}', '<ltx:note role="header">#1</ltx:note>', mode => 'text');
+DefConstructor('\header{}', 
+	       '<ltx:note role="header">#1</ltx:note>', 
+	       mode => 'text',
+	       afterDigest => sub {
+		   my ($stomach, $whatsit) = @_;
+		   print "Whatsitarg:".ToString($whatsit->getArg(1))."\n";
+		   AssignValue('HeaderName', ToString($whatsit->getArg(1)), 'global');
+		   return;
+	       }
+);
 
 my $dsl = <<'END_OF_DSL';
 :default ::= action => [name,values]
@@ -77,7 +86,7 @@ my $doc;
 
 
 sub CodeProcess::do_macro {
-    print "doing a macro\n".Dumper(@_);
+    # print "doing a macro\n".Dumper(@_);
     $doc->insertElement('ltx:note', $_[2], role => 'macro');
 }
 
@@ -85,14 +94,16 @@ DefConstructor('\@@listings@block {} {}',
 	       sub {
 		   my ($document, $index, $content, %props) = @_;
 		   my $inHeader = $props{inHeader};
-
+		   
 		   if($inHeader) {
+		       my $headerName = $props{headerName};
 		       my $data_key      = 'LISTINGS_DATA_' . ToString($index);
 		       my $listings_data = LookupValue($data_key);
 		       $doc = $document;
 		       
 		       # print 'Dumping\n'.Dumper($value_ref);
-		       $document->openElement('ltx:note', role => 'synopsis');
+		       print "HeaderName: $headerName\n";
+		       $document->openElement('ltx:note', role => 'synopsis', class => $headerName);
 		       my $value_ref = $grammar->parse( \$listings_data, 
 							'CodeProcess');
 		       $document->closeElement('ltx:note');
@@ -114,8 +125,12 @@ DefConstructor('\@@listings@block {} {}',
 		   my $data = encode_base64($listings_data);
 
 		   my $inHeader = CounterValue('InHeader')->valueOf;
+		   if($inHeader) {
+	       		   print "AfterDigestHeaderName: ".LookupValue('HeaderName')."\n";
+		   }
 		   $whatsit->setProperties(data => $data,
 					   inHeader => $inHeader,
+					   headerName => LookupValue('HeaderName'),
 					   datamimetype => 'text/plain',
 					   dataencoding => 'base64'); },
 	       locked => 1);
