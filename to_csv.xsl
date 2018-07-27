@@ -1,28 +1,26 @@
 <xsl:stylesheet
     version   = "1.0"
-    xmlns:xsl = "http://www.w3.org/1999/XSL/Transform"
-    xmlns:ltx = "http://dlmf.nist.gov/LaTeXML"
-    exclude-result-prefixes="ltx">
+    xmlns:xsl = "http://www.w3.org/1999/XSL/Transform">
   <xsl:output method="text" omit-xml-declaration="yes" indent="no"/>
 
   <xsl:template match="/">
 header, type, name
 <xsl:apply-templates/>    
   </xsl:template>
-  <xsl:template match="ltx:note[@role='header']">
-    <xsl:value-of select="@class"/>,header,<xsl:value-of select="@class"/>
+  <xsl:template match="header">
+    <xsl:value-of select="@name"/>,header,<xsl:value-of select="@name"/>
 <xsl:text>
 </xsl:text>
 <xsl:apply-templates/>    
   </xsl:template>
   
-  <xsl:template match="ltx:note[@role='macro']">
-    <xsl:value-of select="ancestor::ltx:note[@role='header']/@class"/>,macro,<xsl:value-of select="."/>
+  <xsl:template match="macro">
+    <xsl:value-of select="ancestor::header/@name"/>,macro,<xsl:value-of select="@name"/>
 <xsl:text>
 </xsl:text>
   </xsl:template>
-  <xsl:template match="ltx:note[@role='type alias']">
-    <xsl:value-of select="ancestor::ltx:note[@role='header']/@class"/>,type alias,<xsl:value-of select="."/>
+  <xsl:template match="type-alias">
+    <xsl:value-of select="ancestor::header/@name"/>,type alias,<xsl:value-of select="@name"/>
 <xsl:text>
 </xsl:text>
   </xsl:template>
