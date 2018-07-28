@@ -58,9 +58,9 @@ my $dsl = <<'END_OF_DSL';
 :default ::= action => [name,values]
 lexeme default = latm => 1
 
-:start ::= tokens
-tokens ::= token+
-token ::= macro|identifier|punctuation|type_alias|enum_class
+:start ::= statements
+statements ::= statement+
+statement ::= macro|identifier|punctuation|type_alias|enum_class
 macro ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 enum_class ::= 'enum' 'class' identifier ':' (RestOfLine) action => do_enum_class
@@ -77,6 +77,7 @@ THE_REST ~ [^\n]+
 
 :discard ~ whitespace
 whitespace ~ [\s]+
+
 
 END_OF_DSL
 
