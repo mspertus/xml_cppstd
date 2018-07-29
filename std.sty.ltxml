@@ -73,7 +73,7 @@ statement ::= macro_def action => do_statement
 
 macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
-enum_class_dec ::= 'enum' 'class' identifier ':' (RestOfLine) action => do_enum_class
+enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
 
 # This seems to be best due to limited handling of optional in Scanless:DSL
@@ -87,6 +87,13 @@ balanced_angles ::= '<>' action => do_join
 identifier ~ [\w]+
 punctuation ~ [^\s\w]+
 non_angle ~ [^<>]*
+
+:lexeme ~ <class keyword> priority => 1
+<class keyword> ~ 'class'
+
+:lexeme ~ <enum keyword> priority => 1
+<enum keyword> ~ 'enum'
+
 :lexeme ~ <template keyword> priority => 1
 <template keyword> ~ 'template'
 
