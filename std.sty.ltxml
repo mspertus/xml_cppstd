@@ -59,14 +59,24 @@ my $dsl = <<'END_OF_DSL';
 lexeme default = latm => 1
 
 :start ::= statements
+
+#                    | '<' non_angle* balanced_angles non_angle* '>'
+template_introducer ::= 'template' balanced_angles action => do_template_introducer
 statements ::= statement+
-statement ::= macro|identifier|punctuation|type_alias|enum_class
+statement ::= macro
+    |identifier
+    |punctuation
+    |type_alias
+    |enum_class
+    |template_introducer
 macro ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 enum_class ::= 'enum' 'class' identifier ':' (RestOfLine) action => do_enum_class
+balanced_angles ::= '<' non_angle '>' | '<' non_angle balanced_angles non_angle '>'
 
 identifier ~ [\w]+
 punctuation ~ [^\s\w]+
+non_angle ~ [^<>]*
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
@@ -78,15 +88,19 @@ THE_REST ~ [^\n]+
 :discard ~ whitespace
 whitespace ~ [\s]+
 
-
 END_OF_DSL
 
 
 
 
 my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
+
 my $doc;
 
+sub CodeProcess::do_template_introducer {
+
+    print "doing template introducer\n".Dumper(Marpa::R2::Context::location())."\n";
+}
 
 sub CodeProcess::do_macro {
     # print "doing a macro\n".Dumper(@_);
