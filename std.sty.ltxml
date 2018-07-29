@@ -61,22 +61,34 @@ lexeme default = latm => 1
 :start ::= statements
 
 #                    | '<' non_angle* balanced_angles non_angle* '>'
-template_introducer ::= 'template' balanced_angles action => do_template_introducer
+template_introducer ::= <TEMPLATE keyword> balanced_angles action => do_template_introducer
 statements ::= statement+
 statement ::= macro action => do_statement
-    |identifier 
-    |punctuation
-    |type_alias action => do_statement
-    |enum_class action => do_statement
-    |template_introducer
+    | type_alias action => do_statement
+    | enum_class action => do_statement
+    | template_introducer
+    | identifier 
+    | punctuation
+    | comment
+
 macro ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 enum_class ::= 'enum' 'class' identifier ':' (RestOfLine) action => do_enum_class
-balanced_angles ::= '<' non_angle '>' | '<' non_angle balanced_angles non_angle '>'
+comment ::= '//' (RestOfLine)
+
+# This seems to be best due to limited handling of optional in Scanless:DSL
+# See http://savage.net.au/Perl-modules/html/marpa.faq/faq.html#q147
+balanced_angles ::= '<>' action => do_join
+    | '<' non_angle '>' action => do_join
+    | '<' non_angle balanced_angles '>' action => do_join
+    | '<' balanced_angles non_angle '>' action => do_join
+    | '<' non_angle balanced_angles non_angle '>' action => do_join
 
 identifier ~ [\w]+
 punctuation ~ [^\s\w]+
 non_angle ~ [^<>]*
+:lexeme ~ <TEMPLATE keyword> priority => 1
+<TEMPLATE keyword> ~ 'template'
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
@@ -91,15 +103,13 @@ whitespace ~ [\s]+
 END_OF_DSL
 
 
-
-
 my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
 
 my $doc;
 
 sub CodeProcess::do_template_introducer {
 
-    print "doing template introducer\n".Dumper(Marpa::R2::Context::location())."\n";
+    print "doing template introducer\n".Dumper(@_)."\n";
 }
 
 sub CodeProcess::do_macro {
@@ -127,6 +137,13 @@ sub CodeProcess::do_enum_class {
 sub CodeProcess::do_statement {
     $_[1]->($doc)
 }
+
+sub CodeProcess::do_join {
+    (undef, my @args) = @_;
+    print "Doing join:\n".Dumper(@args)."\n";
+    return join('', @args);
+}
+
 
 DefConstructor('\@@listings@block {} {}',
 	       sub {
