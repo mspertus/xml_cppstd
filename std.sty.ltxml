@@ -63,17 +63,17 @@ lexeme default = latm => 1
 #                    | '<' non_angle* balanced_angles non_angle* '>'
 template_introducer ::= <template keyword> balanced_angles action => do_template_introducer
 statements ::= statement+
-statement ::= macro action => do_statement
-    | type_alias action => do_statement
-    | enum_class action => do_statement
+statement ::= macro_def action => do_statement
+    | type_alias_dec action => do_statement
+    | enum_class_dec action => do_statement
     | template_introducer
     | identifier 
     | punctuation
     | comment
 
-macro ::= '#define' identifier (RestOfLine) action => do_macro
-type_alias ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
-enum_class ::= 'enum' 'class' identifier ':' (RestOfLine) action => do_enum_class
+macro_def ::= '#define' identifier (RestOfLine) action => do_macro
+type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
+enum_class_dec ::= 'enum' 'class' identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
 
 # This seems to be best due to limited handling of optional in Scanless:DSL
