@@ -63,11 +63,11 @@ lexeme default = latm => 1
 #                    | '<' non_angle* balanced_angles non_angle* '>'
 template_introducer ::= 'template' balanced_angles action => do_template_introducer
 statements ::= statement+
-statement ::= macro
-    |identifier
+statement ::= macro action => do_statement
+    |identifier 
     |punctuation
-    |type_alias
-    |enum_class
+    |type_alias action => do_statement
+    |enum_class action => do_statement
     |template_introducer
 macro ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
@@ -104,15 +104,28 @@ sub CodeProcess::do_template_introducer {
 
 sub CodeProcess::do_macro {
     # print "doing a macro\n".Dumper(@_);
-    $doc->insertElement('ltx:note', $_[2], role => 'macro');
+    my $macroname = $_[2];
+    return sub {
+	$_[0]->insertElement('ltx:note', $macroname, role => 'macro');
+    }
 }
 
 sub CodeProcess::do_type_alias {
-    $doc->insertElement('ltx:note', $_[2], role => 'type alias');
+    my $aliasname = $_[2];
+    return sub {
+	$_[0]->insertElement('ltx:note', $aliasname, role => 'type alias');
+    }
 }
 
 sub CodeProcess::do_enum_class {
-    $doc->insertElement('ltx:note', $_[3], role => 'enum class');
+    my $enum_class_name = $_[3];
+    return sub {
+	$_[0]->insertElement('ltx:note', $enum_class_name, role => 'enum class');
+    }
+}
+
+sub CodeProcess::do_statement {
+    $_[1]->($doc)
 }
 
 DefConstructor('\@@listings@block {} {}',
