@@ -61,7 +61,7 @@ lexeme default = latm => 1
 :start ::= statements
 
 #                    | '<' non_angle* balanced_angles non_angle* '>'
-template_introducer ::= <TEMPLATE keyword> balanced_angles action => do_template_introducer
+template_introducer ::= <template keyword> balanced_angles action => do_template_introducer
 statements ::= statement+
 statement ::= macro action => do_statement
     | type_alias action => do_statement
@@ -87,8 +87,8 @@ balanced_angles ::= '<>' action => do_join
 identifier ~ [\w]+
 punctuation ~ [^\s\w]+
 non_angle ~ [^<>]*
-:lexeme ~ <TEMPLATE keyword> priority => 1
-<TEMPLATE keyword> ~ 'template'
+:lexeme ~ <template keyword> priority => 1
+<template keyword> ~ 'template'
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
