@@ -65,6 +65,7 @@ template_introducer ::= <template keyword> balanced_angles action => do_template
 statements ::= statement+
 statement ::= macro_def
     | class_dec
+    | class_template_dec
     | type_alias_dec
     | enum_class_dec
     | enum_dec
@@ -76,6 +77,7 @@ statement ::= macro_def
 macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 class_dec ::= <class keyword> identifier (RestOfLine) action => do_class
+class_template_dec ::= template_introducer <class keyword> identifier (RestOfLine) action => do_class_template
 enum_dec ::= <enum keyword> identifier (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
@@ -140,6 +142,13 @@ sub CodeProcess::do_class {
     $doc->closeElement('ltx:note');
 }
 
+sub CodeProcess::do_class_template {
+    $doc->openElement('ltx:note', role => 'declaration', class => 'class-template');
+    $doc->insertElement('ltx:note', $_[3], role => 'name');
+    $doc->insertElement('ltx:note', match_text(), role => 'text');
+    $doc->closeElement('ltx:note');
+}
+
 sub CodeProcess::do_macro {
     $doc->openElement('ltx:note', role => 'declaration', class => 'macro');
     $doc->insertElement('ltx:note', $_[2], role => 'name');
@@ -171,7 +180,6 @@ sub CodeProcess::do_enum {
 
 sub CodeProcess::do_join {
     (undef, my @args) = @_;
-    print "Doing join:\n".Dumper(@args)."\n";
     return join('', @args);
 }
 

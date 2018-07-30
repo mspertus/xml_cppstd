@@ -25,6 +25,13 @@
     </class>
   </xsl:template>
 
+  <xsl:template match="ltx:note[@role='declaration' and @class='class-template']">
+    <class-template>
+      <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
+      <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
+    </class-template>
+  </xsl:template>
+
   <xsl:template match="ltx:note[@role='declaration' and @class='macro']">
     <macro>
       <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>

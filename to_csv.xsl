@@ -30,7 +30,7 @@ header, type, name, text
 <xsl:apply-templates/>    
   </xsl:template>
   
-<xsl:template match="class|macro|type-alias|enum-class|enum">
+<xsl:template match="class|class-template|macro|type-alias|enum-class|enum">
 <xsl:value-of select="ancestor::header/@name"/>,<xsl:call-template name="split"><xsl:with-param name="pText"><xsl:value-of select ="name(.)"/></xsl:with-param></xsl:call-template>,<xsl:value-of select="@name"/>,"<xsl:value-of select="text"/>"
 </xsl:template>
   
