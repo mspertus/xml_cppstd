@@ -66,6 +66,7 @@ statements ::= statement+
 statement ::= macro_def action => do_statement
     | type_alias_dec action => do_statement
     | enum_class_dec action => do_statement
+    | enum_dec action => do_statement
     | template_introducer
     | identifier 
     | punctuation
@@ -73,6 +74,7 @@ statement ::= macro_def action => do_statement
 
 macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
+enum_dec ::= <enum keyword> identifier (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
 
@@ -102,6 +104,8 @@ RestOfLine
   ::=           action => ::undef  # rest is optional
 RestOfLine
   ::= THE_REST  action => ::undef  # matches anything
+
+:lexeme ~ THE_REST priority => 1
 THE_REST ~ [^\n]+
 
 :discard ~ whitespace
@@ -138,6 +142,13 @@ sub CodeProcess::do_enum_class {
     my $enum_class_name = $_[3];
     return sub {
 	$_[0]->insertElement('ltx:note', $enum_class_name, role => 'enum class');
+    }
+}
+
+sub CodeProcess::do_enum {
+    my $enum_name = $_[2];
+    return sub {
+	$_[0]->insertElement('ltx:note', $enum_name, role => 'enum class');
     }
 }
 
