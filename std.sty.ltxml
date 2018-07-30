@@ -77,7 +77,8 @@ statement ::= macro_def
 macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 class_dec ::= <class keyword> identifier (RestOfLine) action => do_class
-class_template_dec ::= template_introducer <class keyword> identifier (RestOfLine) action => do_class_template
+class_template_dec ::= template_introducer <class keyword> identifier non_angle (RestOfLine) action => do_class_template
+class_template_specialization_dec ::= template_introducer <class keyword> identifier balanced_angles (RestOfLine) action => do_class_template_specialization
 enum_dec ::= <enum keyword> identifier (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
@@ -143,6 +144,13 @@ sub CodeProcess::do_class {
 }
 
 sub CodeProcess::do_class_template {
+    $doc->openElement('ltx:note', role => 'declaration', class => 'class-template');
+    $doc->insertElement('ltx:note', $_[3].$_[4], role => 'name');
+    $doc->insertElement('ltx:note', match_text(), role => 'text');
+    $doc->closeElement('ltx:note');
+}
+
+sub CodeProcess::do_class_template_specialization {
     $doc->openElement('ltx:note', role => 'declaration', class => 'class-template');
     $doc->insertElement('ltx:note', $_[3], role => 'name');
     $doc->insertElement('ltx:note', match_text(), role => 'text');
