@@ -14,7 +14,7 @@ package LaTeXML::Package::Pool;
 use strict;
 use warnings;
 use LaTeXML::Package;
-use Regexp::Common;
+use String::Util 'trim';
 use Marpa::R2;
 use Data::Dumper;
 
@@ -117,6 +117,7 @@ END_OF_DSL
 
 
 my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
+my $recce;
 
 my $doc;
 
@@ -162,6 +163,12 @@ sub CodeProcess::do_enum {
 }
 
 sub CodeProcess::do_statement {
+        my @g1 = Marpa::R2::Context::location();
+    print "g1 locations are: @g1\n";
+  
+    my @span1 = $recce->g1_location_to_span($g1[0]);
+    my @span2 = $recce->g1_location_to_span($g1[1]);
+    print trim($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]))."\n";
     $_[1]->($doc)
 }
 
@@ -186,8 +193,12 @@ DefConstructor('\@@listings@block {} {}',
 		       # print 'Dumping\n'.Dumper($value_ref);
 		       print "HeaderName: $headerName\n";
 		       $document->openElement('ltx:note', role => 'header', class => $headerName);
-		       my $value_ref = $grammar->parse( \$listings_data, 
-							'CodeProcess');
+		       # my $value_ref = $grammar->parse( \$listings_data, 'CodeProcess');
+		       $recce = Marpa::R2::Scanless::R->new( { grammar => $grammar,
+							       semantics_package => 'CodeProcess' } );
+		       my $length_read = $recce->read( \$listings_data );
+		       my $value_ref = $recce->value;
+		       my $value = ${$value_ref};
 		       $document->closeElement('ltx:note');
 		   }
 		   $document->insertElement('ltx:listing',
