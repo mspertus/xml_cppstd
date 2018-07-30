@@ -17,23 +17,33 @@
       <xsl:apply-templates/>
     </header>
   </xsl:template>
-  
-  <xsl:template match="ltx:note[@role='macro']">
+
+  <xsl:template match="ltx:note[@role='declaration' and @class='class']">
+    <class>
+      <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
+      <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
+    </class>
+  </xsl:template>
+
+  <xsl:template match="ltx:note[@role='declaration' and @class='macro']">
     <macro>
-      <xsl:attribute name="name"><xsl:value-of select="."/></xsl:attribute>
+      <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
+      <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
     </macro>
   </xsl:template>
 
-  <xsl:template match="ltx:note[@role='type alias']">
+  <xsl:template match="ltx:note[@role='declaration' and @class='type-alias']">
     <type-alias>
-      <xsl:attribute name="name"><xsl:value-of select="."/></xsl:attribute>
+      <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
+      <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
     </type-alias>
   </xsl:template>
 
-  <xsl:template match="ltx:note[@role='enum class']">
-    <enum-class>
-      <xsl:attribute name="name"><xsl:value-of select="."/></xsl:attribute>
-    </enum-class>
+  <xsl:template match="ltx:note[@role='declaration' and @class='enum-class']">
+    <enum-class> 
+      <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
+      <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
+   </enum-class>
   </xsl:template>
 
   <xsl:template match="text()|@*"/>
