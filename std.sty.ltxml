@@ -64,6 +64,7 @@ lexeme default = latm => 1
 template_introducer ::= <template keyword> balanced_angles action => do_template_introducer
 statements ::= statement+
 statement ::= macro_def action => do_statement
+    | class_dec action => do_statement
     | type_alias_dec action => do_statement
     | enum_class_dec action => do_statement
     | enum_dec action => do_statement
@@ -74,6 +75,7 @@ statement ::= macro_def action => do_statement
 
 macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
+class_dec ::= <class keyword> identifier (RestOfLine) action => do_class
 enum_dec ::= <enum keyword> identifier (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
@@ -121,6 +123,13 @@ my $doc;
 sub CodeProcess::do_template_introducer {
 
     print "doing template introducer\n".Dumper(@_)."\n";
+}
+
+sub CodeProcess::do_class {
+    my $classname = $_[2];
+    return sub {
+	$_[0]->insertElement('ltx:note', $classname, role => 'class');
+    }
 }
 
 sub CodeProcess::do_macro {
