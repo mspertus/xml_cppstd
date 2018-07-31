@@ -26,10 +26,21 @@
   </xsl:template>
 
   <xsl:template match="ltx:note[@role='declaration' and @class='class-template']">
+    <xsl:variable name="primary-template-name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:variable>
     <class-template>
       <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
       <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
+      <xsl:for-each select="//ltx:note[@class='class-template-specialization' and ltx:note[@role='primary-template-name']/text()=$primary-template-name]">
+	<xsl:call-template name="class-template-specialization"/>
+      </xsl:for-each>
     </class-template>
+  </xsl:template>
+
+  <xsl:template name="class-template-specialization">
+    <class-template-specialization>
+      <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
+      <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
+    </class-template-specialization>
   </xsl:template>
 
   <xsl:template match="ltx:note[@role='declaration' and @class='macro']">
