@@ -70,10 +70,12 @@ statement ::= macro_def
     | type_alias_dec
     | enum_class_dec
     | enum_dec
+    | comment
+    | storage_class_specifier
     | identifier 
     | punctuation
-    | comment
     | template_dec
+
 
 macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
@@ -88,6 +90,12 @@ comment ::= '//' (RestOfLine)
 template_dec ::= template_introducer identifier (RestOfLine)
     | template_introducer punctuation (RestOfLine)
 
+
+
+storage_class_specifier ::= <static keyword>
+    | <thread_local keyword>
+    | <extern keyword>
+    | <mutable keyword>
 
 # This seems to be best due to limited handling of optional in Scanless:DSL
 # See http://savage.net.au/Perl-modules/html/marpa.faq/faq.html#q147
@@ -111,6 +119,18 @@ non_angles ~ non_angle_char+
 
 :lexeme ~ <template keyword> priority => 1
 <template keyword> ~ 'template'
+
+:lexeme ~ <static keyword> priority => 1
+<static keyword> ~ 'static'
+
+:lexeme ~ <thread_local keyword> priority => 1
+<thread_local keyword> ~ 'thread_local'
+
+:lexeme ~ <extern keyword> priority => 1
+<extern keyword> ~ 'extern'
+
+:lexeme ~ <mutable keyword> priority => 1
+<mutable keyword> ~ 'mutable'
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
