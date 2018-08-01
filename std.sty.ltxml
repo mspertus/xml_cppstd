@@ -72,7 +72,6 @@ statement ::= macro_def
     | enum_dec
     | comment
     | storage_class_specifier
-    | operator_function_id
     | operator
     | identifier 
     | punctuation
@@ -95,6 +94,7 @@ template_dec ::= template_introducer identifier (RestOfLine)
 
 # A.4 Expressions
 unqualified_id ::= identifier  # TODO: Full definition
+    | operator-function-id
 
 # A.6 Declarations
 storage_class_specifier ::= <static keyword>
