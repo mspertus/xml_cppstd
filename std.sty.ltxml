@@ -72,6 +72,8 @@ statement ::= macro_def
     | enum_dec
     | comment
     | storage_class_specifier
+    | operator_function_id
+    | operator
     | identifier 
     | punctuation
     | template_dec
@@ -91,11 +93,23 @@ template_dec ::= template_introducer identifier (RestOfLine)
     | template_introducer punctuation (RestOfLine)
 
 
+# A.4 Expressions
+unqualified_id ::= identifier  # TODO: Full definition
 
+# A.6 Declarations
 storage_class_specifier ::= <static keyword>
     | <thread_local keyword>
     | <extern keyword>
     | <mutable keyword>
+
+# A.11 Overloading
+operator_function_id ::= <operator keyword> operator
+
+operator ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete keyword> '[]'
+    | '()' | '[]' | '->' | '->*' | '~' | '!' | '+' | '-' | '*' | '/' | '%' | '^' | '&' | '|'
+    | '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '^=' | '&=' | '|=' | '==' | '!='
+    | '<' | '>' | '<=' | '>=' | '<=>' | '&&' | '||' | '<<' | '>>' | '<<=' | '>>='
+    | '++' | '--' | ','
 
 # This seems to be best due to limited handling of optional in Scanless:DSL
 # See http://savage.net.au/Perl-modules/html/marpa.faq/faq.html#q147
@@ -111,26 +125,36 @@ non_angle_char ~ [^<>]
 non_angle ~ non_angle_char
 non_angles ~ non_angle_char+
 
+# Keywords
 :lexeme ~ <class keyword> priority => 1
 <class keyword> ~ 'class'
 
+:lexeme ~ <delete keyword> priority => 1
+<delete keyword> ~ 'delete'
+
 :lexeme ~ <enum keyword> priority => 1
 <enum keyword> ~ 'enum'
-
-:lexeme ~ <template keyword> priority => 1
-<template keyword> ~ 'template'
-
-:lexeme ~ <static keyword> priority => 1
-<static keyword> ~ 'static'
-
-:lexeme ~ <thread_local keyword> priority => 1
-<thread_local keyword> ~ 'thread_local'
 
 :lexeme ~ <extern keyword> priority => 1
 <extern keyword> ~ 'extern'
 
 :lexeme ~ <mutable keyword> priority => 1
 <mutable keyword> ~ 'mutable'
+
+:lexeme ~ <new keyword> priority => 1
+<new keyword> ~ 'new'
+
+:lexeme ~ <operator keyword> priority => 1
+<operator keyword> ~ 'operator'
+
+:lexeme ~ <static keyword> priority => 1
+<static keyword> ~ 'static'
+
+:lexeme ~ <template keyword> priority => 1
+<template keyword> ~ 'template'
+
+:lexeme ~ <thread_local keyword> priority => 1
+<thread_local keyword> ~ 'thread_local'
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
