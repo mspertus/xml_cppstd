@@ -39,9 +39,9 @@
   <xsl:template name="class-template-specialization">
     <class-template-specialization>
       <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
-      <xsl:attribute name="template-name"><xsl:value-of select="./ltx:note[@role='template-name']"/></xsl:attribute>
+      <template-name><xsl:value-of select="./ltx:note[@role='template-name']"/></template-name>
       <template-arguments>
-	<xsl:for-each select="ltx:note[@role='template-arguments']">
+	<xsl:for-each select="ltx:note[@role='template-argument-list']">
 	  <xsl:for-each select="ltx:note[@role='template-argument']">
 	    <template-argument><xsl:value-of select="."/></template-argument>
 	  </xsl:for-each>

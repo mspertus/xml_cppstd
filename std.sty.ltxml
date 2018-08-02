@@ -210,7 +210,7 @@ sub match_text {
     my @span2 = $recce->g1_location_to_span($g1[1]);
     return crunch($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
 }
-
+    
 sub CodeProcess::do_dump {
     print match_text()."\n";
     print Dumper(@_);
@@ -247,7 +247,7 @@ sub CodeProcess::do_class_template_specialization {
     $doc->openElement('ltx:note', role => 'declaration', class => 'class-template-specialization');
     $doc->insertElement('ltx:note', $$simple_type_id{text}, role => 'name');
     $doc->insertElement('ltx:note', $$simple_type_id{template_name}, role => 'template-name');
-    $doc->openElement('ltx:note', role => 'template-arguments');
+    $doc->openElement('ltx:note', role => 'template-argument-list');
     map { $doc->insertElement('ltx:note', $_, role => 'template-argument'); } @$arguments;
     $doc->closeElement('ltx:note');
     $doc->insertElement('ltx:note', match_text(), role => 'text');
