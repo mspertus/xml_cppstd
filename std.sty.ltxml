@@ -71,6 +71,7 @@ statement ::= macro_def
     | enum_class_dec
     | enum_dec
     | comment
+    | type_specifier_seq
     | storage_class_specifier
     | operator
     | identifier 
@@ -82,9 +83,7 @@ macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 class_dec ::= <class keyword> identifier  (RestOfLine) action => do_class
 class_template_dec ::= template_introducer <class keyword> identifier non_angle  action => do_class_template
-
-
-class_template_specialization_dec ::= template_introducer <class keyword> identifier balanced_angles (RestOfLine) action => do_class_template_specialization
+class_template_specialization_dec ::= template_introducer <class keyword> simple_template_id (RestOfLine) action => do_class_template_specialization
 enum_dec ::= <enum keyword> identifier (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
@@ -94,13 +93,24 @@ template_dec ::= template_introducer identifier (RestOfLine)
 
 # A.4 Expressions
 unqualified_id ::= identifier  # TODO: Full definition
-    | operator-function-id
+    | operator_function_id
 
 # A.6 Declarations
 storage_class_specifier ::= <static keyword>
     | <thread_local keyword>
     | <extern keyword>
     | <mutable keyword>
+
+type_specifier ::= simple_type_specifier action => pass_through # TODO: Full definition
+
+type_specifier_seq ::= type_specifier+ action => do_join # TODO: Full definition
+
+simple_type_specifier ::= type_name action => pass_through # TODO: Full definition
+
+type_name ::= identifier action => pass_through # TODO: Correct definition
+
+#A.7 Declarators
+type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
 
 # A.11 Overloading
 operator_function_id ::= <operator keyword> operator
@@ -110,6 +120,21 @@ operator ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete key
     | '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '^=' | '&=' | '|=' | '==' | '!='
     | '<' | '>' | '<=' | '>=' | '<=>' | '&&' | '||' | '<<' | '>>' | '<<=' | '>>='
     | '++' | '--' | ','
+
+# A.12 Templates
+
+simple_template_id ::=
+    template_name '<' '>' action => do_simple_template_id 
+    | template_name '<' template_argument_list '>' action => do_simple_template_id_template_argument_list
+
+template_name ::= identifier action => pass_through
+
+template_argument_list ::= template_argument action => do_template_argument_list_template_argument
+    | template_argument <ellipses keyword>
+    | template_argument_list ',' template_argument action => do_template_argument_list_template_argument_list_template_argument
+    | template_argument_list ',' template_argument <ellipses keyword>
+
+template_argument ::= type_id action => pass_through # TODO: Full definition
 
 # This seems to be best due to limited handling of optional in Scanless:DSL
 # See http://savage.net.au/Perl-modules/html/marpa.faq/faq.html#q147
@@ -156,6 +181,9 @@ non_angles ~ non_angle_char+
 :lexeme ~ <thread_local keyword> priority => 1
 <thread_local keyword> ~ 'thread_local'
 
+:lexeme ~ <ellipses keyword> priority => 1
+<ellipses keyword> ~ '...'
+
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
   ::=           action => ::undef  # rest is optional
@@ -183,6 +211,15 @@ sub match_text {
     return crunch($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
 }
 
+sub CodeProcess::do_dump {
+    print match_text()."\n";
+    print Dumper(@_);
+}
+
+sub CodeProcess::pass_through {
+    return $_[1];
+}
+
 sub CodeProcess::do_template_introducer {
 
     # print "doing template introducer\n".Dumper(@_)."\n";
@@ -197,7 +234,6 @@ sub CodeProcess::do_class {
 }
 
 sub CodeProcess::do_class_template {
-    print "in class template\n";
     $doc->openElement('ltx:note', role => 'declaration', class => 'class-template');
     $doc->insertElement('ltx:note', $_[3], role => 'name');
     $doc->insertElement('ltx:note', match_text(), role => 'text');
@@ -205,9 +241,15 @@ sub CodeProcess::do_class_template {
 }
 
 sub CodeProcess::do_class_template_specialization {
+    my $simple_type_id = $_[3];
+    my $arguments = $$simple_type_id{template_argument_list};
+    
     $doc->openElement('ltx:note', role => 'declaration', class => 'class-template-specialization');
-    $doc->insertElement('ltx:note', $_[3].$_[4], role => 'name');
-    $doc->insertElement('ltx:note', $_[3], role => 'primary-template-name');
+    $doc->insertElement('ltx:note', $$simple_type_id{text}, role => 'name');
+    $doc->insertElement('ltx:note', $$simple_type_id{template_name}, role => 'template-name');
+    $doc->openElement('ltx:note', role => 'template-arguments');
+    map { $doc->insertElement('ltx:note', $_, role => 'template-argument'); } @$arguments;
+    $doc->closeElement('ltx:note');
     $doc->insertElement('ltx:note', match_text(), role => 'text');
     $doc->closeElement('ltx:note');
 }
@@ -243,9 +285,28 @@ sub CodeProcess::do_enum {
 
 sub CodeProcess::do_join {
     (undef, my @args) = @_;
-    return join('', @args);
+    return join(' ', @args);
 }
 
+# A.12 Templates
+sub CodeProcess::do_simple_template_id {
+    return { template_name => $_[1],  template_argument_list => [], 'text' => match_text() };
+}
+
+sub CodeProcess::do_simple_template_id_template_argument_list {
+    return { template_name => $_[1], template_argument_list => $_[3], 'text' => match_text() };
+}
+
+sub CodeProcess::do_template_argument_list_template_argument {
+    return [$_[1]];
+}
+
+sub CodeProcess::do_template_argument_list_template_argument_list_template_argument {
+    my(undef, $args_so_far, undef, $new_arg) = @_;
+    my @result = @$args_so_far;
+    push(@result, @$new_arg);
+    return \@result;
+}
 
 DefConstructor('\@@listings@block {} {}',
 	       sub {
