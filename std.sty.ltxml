@@ -17,6 +17,7 @@ use LaTeXML::Package;
 use String::Util 'crunch';
 use Marpa::R2;
 use Data::Dumper;
+use Tie::IxHash;
 
 LoadPool('LaTeX');
 RequirePackage('listings');
@@ -290,11 +291,15 @@ sub CodeProcess::do_join {
 
 # A.12 Templates
 sub CodeProcess::do_simple_template_id {
-    return { template_name => $_[1],  template_argument_list => [], 'text' => match_text() };
+    my %result;
+    tie(%result, 'Tie::IxHash', template_name => $_[1],  template_argument_list => [], 'text' => match_text());
+    return \%result;
 }
 
 sub CodeProcess::do_simple_template_id_template_argument_list {
-    return { template_name => $_[1], template_argument_list => $_[3], 'text' => match_text() };
+    my %result;
+    tie(%result, 'Tie::IxHash', template_name => $_[1], template_argument_list => $_[3], 'text' => match_text() );
+    return \%result;
 }
 
 sub CodeProcess::do_template_argument_list_template_argument {
