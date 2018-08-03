@@ -67,7 +67,7 @@ statements ::= statement+
 statement ::= macro_def
     | class_dec
     | class_template_dec
-    | class_template_specialization_dec
+    | class_template_specialization
     | type_alias_dec
     | enum_class_dec
     | enum_dec
@@ -84,7 +84,7 @@ macro_def ::= '#define' identifier (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
 class_dec ::= <class keyword> identifier  (RestOfLine) action => do_class
 class_template_dec ::= template_introducer <class keyword> identifier non_angle  action => do_class_template
-class_template_specialization_dec ::= template_introducer <class keyword> simple_template_id (RestOfLine) action => do_class_template_specialization
+class_template_specialization ::= template_introducer <class keyword> simple_template_id (RestOfLine) action => do_class_template_specialization
 enum_dec ::= <enum keyword> identifier (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
@@ -125,17 +125,17 @@ operator ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete key
 # A.12 Templates
 
 simple_template_id ::=
-    template_name '<' '>' action => do_simple_template_id 
-    | template_name '<' template_argument_list '>' action => do_simple_template_id_template_argument_list
+    template_name ('<') ('>') action => do_simple_template_id 
+    | template_name ('<') template_argument_list ('>') action => do_grammar
 
-template_name ::= identifier action => pass_through
+template_name ::= identifier action => do_capture
 
 template_argument_list ::= template_argument action => do_template_argument_list_template_argument
     | template_argument <ellipses keyword>
     | template_argument_list ',' template_argument action => do_template_argument_list_template_argument_list_template_argument
     | template_argument_list ',' template_argument <ellipses keyword>
 
-template_argument ::= type_id action => pass_through # TODO: Full definition
+template_argument ::= type_id action => do_capture # TODO: Full definition
 
 # This seems to be best due to limited handling of optional in Scanless:DSL
 # See http://savage.net.au/Perl-modules/html/marpa.faq/faq.html#q147
@@ -205,6 +205,22 @@ my $recce;
 
 my $doc;
 
+sub insertXML {
+    my ($doc, $tree) = @_;
+    print "insertXML".ref($tree)."\n";
+    if(ref($tree) eq "") {
+	$doc->absorb($tree);
+    } elsif(ref($tree) eq "HASH") {
+	foreach my $key (keys %$tree) {
+	    $doc->openElement('ltx:note', role => $key);
+	    insertXML($doc, $$tree{$key});
+	    $doc->closeElement('ltx:note');
+	}
+    } elsif(ref($tree) eq "ARRAY") {
+	map { insertXML($doc, $_) } @$tree;
+    }
+}
+
 sub match_text {
     my @g1 = Marpa::R2::Context::location();
     my @span1 = $recce->g1_location_to_span($g1[0]);
@@ -226,6 +242,28 @@ sub CodeProcess::do_template_introducer {
     # print "doing template introducer\n".Dumper(@_)."\n";
 }
 
+sub CodeProcess::do_grammar {
+    my (undef, @args) = @_;
+    my $rule_id     = $Marpa::R2::Context::rule;
+    my $slg         = $Marpa::R2::Context::slg;
+    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
+    $nonterminal=~s/_/-/g;
+    my %result;
+    tie(%result, 'Tie::IxHash');
+    map { my $arg = $_; map { $result{$_} = $$arg{$_} } keys %$arg; } @args;
+    $result{match} = match_text();
+    return { $nonterminal => \%result };
+}
+
+sub CodeProcess::do_capture {
+    my (undef, @args) = @_;
+    my $rule_id     = $Marpa::R2::Context::rule;
+    my $slg         = $Marpa::R2::Context::slg;
+    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
+    $nonterminal=~s/_/-/g;
+    return { $nonterminal => $_[1] };
+}
+
 sub CodeProcess::do_class {
     print "in class\n";
     $doc->openElement('ltx:note', role => 'declaration', class => 'class');
@@ -242,15 +280,14 @@ sub CodeProcess::do_class_template {
 }
 
 sub CodeProcess::do_class_template_specialization {
-    my $simple_type_id = $_[3];
-    my $arguments = $$simple_type_id{template_argument_list};
-    
+    print "Class_template_specialization\n";
+    my $rule_id     = $Marpa::R2::Context::rule;
+    my $slg         = $Marpa::R2::Context::slg;
+
+    my $simple_template_id = $_[3];
     $doc->openElement('ltx:note', role => 'declaration', class => 'class-template-specialization');
-    $doc->insertElement('ltx:note', $$simple_type_id{text}, role => 'name');
-    $doc->insertElement('ltx:note', $$simple_type_id{template_name}, role => 'template-name');
-    $doc->openElement('ltx:note', role => 'template-argument-list');
-    map { $doc->insertElement('ltx:note', $_, role => 'template-argument'); } @$arguments;
-    $doc->closeElement('ltx:note');
+    $doc->insertElement('ltx:note', $$simple_template_id{'simple-template-id'}{match}, role => 'name');
+    insertXML($doc, $simple_template_id);
     $doc->insertElement('ltx:note', match_text(), role => 'text');
     $doc->closeElement('ltx:note');
 }
@@ -292,25 +329,19 @@ sub CodeProcess::do_join {
 # A.12 Templates
 sub CodeProcess::do_simple_template_id {
     my %result;
-    tie(%result, 'Tie::IxHash', template_name => $_[1],  template_argument_list => [], 'text' => match_text());
-    return \%result;
-}
-
-sub CodeProcess::do_simple_template_id_template_argument_list {
-    my %result;
-    tie(%result, 'Tie::IxHash', template_name => $_[1], template_argument_list => $_[3], 'text' => match_text() );
-    return \%result;
+    tie(%result, 'Tie::IxHash', 'template-name' => $_[1],  'template-argument-list' => [], 'match' => match_text());
+    return { "simple-template-id" => \%result};
 }
 
 sub CodeProcess::do_template_argument_list_template_argument {
-    return [$_[1]];
+    return { "template-argument-list" => [$_[1]] };
 }
 
 sub CodeProcess::do_template_argument_list_template_argument_list_template_argument {
     my(undef, $args_so_far, undef, $new_arg) = @_;
-    my @result = @$args_so_far;
+    my @result = @$$args_so_far{"template-argument-list"};
     push(@result, @$new_arg);
-    return \@result;
+    return { "template-argument-list" => \@result };
 }
 
 DefConstructor('\@@listings@block {} {}',
