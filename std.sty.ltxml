@@ -61,13 +61,11 @@ lexeme default = latm => 1
 
 :start ::= statements
 
-#                    | '<' non_angle* balanced_angles non_angle* '>'
-template_introducer ::= <template keyword> balanced_angles action => do_template_introducer
 statements ::= statement+
 statement ::= macro_def
     | class_dec
     | class_template_dec
-    | class_template_specialization
+    | class_template_explicit_specialization
     | type_alias_dec
     | enum_class_dec
     | enum_dec
@@ -75,26 +73,28 @@ statement ::= macro_def
     | type_specifier_seq
     | storage_class_specifier
     | operator
-    | identifier 
+    | <ident>
     | punctuation
     | template_dec
 
 
-macro_def ::= '#define' identifier (RestOfLine) action => do_macro
-type_alias_dec ::= 'using' identifier '=' (RestOfLine) action => do_type_alias
-class_dec ::= <class keyword> identifier  (RestOfLine) action => do_class
-class_template_dec ::= template_introducer <class keyword> identifier non_angle  action => do_class_template
-class_template_specialization ::= template_introducer <class keyword> simple_template_id (RestOfLine) action => do_class_template_specialization
-enum_dec ::= <enum keyword> identifier (RestOfLine) action => do_enum
-enum_class_dec ::= <enum keyword> <class keyword> identifier ':' (RestOfLine) action => do_enum_class
+macro_def ::= '#define' <ident> (RestOfLine) action => do_macro
+type_alias_dec ::= 'using' <ident> '=' (RestOfLine) action => do_type_alias
+class_dec ::= <class keyword> <ident>  (RestOfLine) action => do_class
+class_template_dec ::= template_head <class keyword> <ident> non_angle  action => do_class_template
+class_template_explicit_specialization ::= <template keyword> ('<') ('>') <class keyword> simple_template_id (RestOfLine) action => do_class_template_specialization
+enum_dec ::= <enum keyword> <ident> (RestOfLine) action => do_enum
+enum_class_dec ::= <enum keyword> <class keyword> <ident> ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine)
-template_dec ::= template_introducer identifier (RestOfLine)
-    | template_introducer punctuation (RestOfLine)
+template_dec ::= template_head <ident> (RestOfLine)
+    | <template keyword> '<' '>' <ident> (RestOfLine)
+    | template_head punctuation (RestOfLine)
+    | <template keyword> '<' '>' punctuation (RestOfLine)
 
 
 # A.4 Expressions
-unqualified_id ::= identifier  # TODO: Full definition
-    | operator_function_id
+id_expression ::= unqualified_id action => do_grammar # TODO: Full definition
+unqualified_id ::= identifier action => do_grammar  # TODO: Full definition
 
 # A.6 Declarations
 storage_class_specifier ::= <static keyword>
@@ -108,48 +108,65 @@ type_specifier_seq ::= type_specifier+ action => do_join # TODO: Full definition
 
 simple_type_specifier ::= type_name action => pass_through # TODO: Full definition
 
-type_name ::= identifier action => pass_through # TODO: Correct definition
+type_name ::= <ident> action => pass_through # TODO: Correct definition
 
 #A.7 Declarators
 type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
 
 # A.11 Overloading
-operator_function_id ::= <operator keyword> operator
+operator_function_id ::= (<operator keyword>) operator
 
 operator ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete keyword> '[]'
-    | '()' | '[]' | '->' | '->*' | '~' | '!' | '+' | '-' | '*' | '/' | '%' | '^' | '&' | '|'
+    | '()' | '[]' | '->' | '->*' 
+    | '~' | '!' | '+' | '-' | '*' | '/' | '%' | '^' | '&' | '|'
     | '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '^=' | '&=' | '|=' | '==' | '!='
     | '<' | '>' | '<=' | '>=' | '<=>' | '&&' | '||' | '<<' | '>>' | '<<=' | '>>='
     | '++' | '--' | ','
 
 # A.12 Templates
+template_head ::= (<template keyword>) ('<') template_parameter_list ('>') # TODO: Full definition
+
+template_parameter_list ::= template_parameter action => do_list
+    | template_parameter_list (',') template_parameter action => do_list
+
+template_parameter ::= type_parameter action => do_grammar # TODO: Full definition
+
+type_parameter ::= type_parameter_key action => do_grammar
+    | type_parameter_key ellipses action => do_grammar
+    | type_parameter_key identifier action => do_grammar
+    | type_parameter_key ellipses identifier action => do_grammar
+    | type_parameter_key ('=') type_id action => do_grammar
+    | type_parameter_key identifier ('=') type_id action => do_grammar
+    | template_head type_parameter_key action => do_grammar
+    | template_head type_parameter_key ellipses action => do_grammar
+    | template_head type_parameter_key identifier action => do_grammar
+    | template_head type_parameter_key ellipses identifier action => do_grammar
+    | type_parameter_key ('=') type_id action => do_grammar
+    | type_parameter_key identifier ('=') action => do_grammar
+
+
+type_parameter_key ::= <class keyword> action => do_capture | <typename keyword> action => do_capture
 
 simple_template_id ::=
     template_name ('<') ('>') action => do_simple_template_id 
     | template_name ('<') template_argument_list ('>') action => do_grammar
 
-template_name ::= identifier action => do_capture
+template_name ::= <ident> action => do_capture
 
-template_argument_list ::= template_argument action => do_template_argument_list_template_argument
+template_argument_list ::= template_argument action => do_list # TODO: actions
     | template_argument <ellipses keyword>
-    | template_argument_list ',' template_argument action => do_template_argument_list_template_argument_list_template_argument
-    | template_argument_list ',' template_argument <ellipses keyword>
+    | template_argument_list (',') template_argument action => do_list
+    | template_argument_list (',') template_argument <ellipses keyword>
 
 template_argument ::= type_id action => do_capture # TODO: Full definition
 
-# This seems to be best due to limited handling of optional in Scanless:DSL
-# See http://savage.net.au/Perl-modules/html/marpa.faq/faq.html#q147
-balanced_angles ::= '<>' action => do_join
-    | '<' non_angles '>' action => do_join
-    | '<' non_angles balanced_angles '>' action => do_join
-    | '<' balanced_angles non_angles '>' action => do_join
-    | '<' non_angles balanced_angles non_angles '>' action => do_join
+identifier ::= <ident> action => do_capture
+ellipses ::= (<ellipses keyword>) action => do_capture
 
-identifier ~ [\w]+
+<ident> ~ [\w]+
 punctuation ~ [^\s\w]+
 non_angle_char ~ [^<>]
 non_angle ~ non_angle_char
-non_angles ~ non_angle_char+
 
 # Keywords
 :lexeme ~ <class keyword> priority => 1
@@ -182,6 +199,9 @@ non_angles ~ non_angle_char+
 :lexeme ~ <thread_local keyword> priority => 1
 <thread_local keyword> ~ 'thread_local'
 
+:lexeme ~ <typename keyword> priority => 1
+<typename keyword> ~ 'typename'
+
 :lexeme ~ <ellipses keyword> priority => 1
 <ellipses keyword> ~ '...'
 
@@ -207,7 +227,6 @@ my $doc;
 
 sub insertXML {
     my ($doc, $tree) = @_;
-    print "insertXML".ref($tree)."\n";
     if(ref($tree) eq "") {
 	$doc->absorb($tree);
     } elsif(ref($tree) eq "HASH") {
@@ -237,11 +256,6 @@ sub CodeProcess::pass_through {
     return $_[1];
 }
 
-sub CodeProcess::do_template_introducer {
-
-    # print "doing template introducer\n".Dumper(@_)."\n";
-}
-
 sub CodeProcess::do_grammar {
     my (undef, @args) = @_;
     my $rule_id     = $Marpa::R2::Context::rule;
@@ -262,6 +276,21 @@ sub CodeProcess::do_capture {
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
     return { $nonterminal => $_[1] };
+}
+
+sub CodeProcess::do_list {
+    my (undef, @args) = @_;
+    my $rule_id     = $Marpa::R2::Context::rule;
+    my $slg         = $Marpa::R2::Context::slg;
+    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
+    $nonterminal=~s/_/-/g;
+    if(scalar(@args) == 1) {
+	return { $nonterminal => [$_[1]] };
+    }
+    my(undef, $args_so_far, $new_arg) = @_;
+    my @result = @$$args_so_far{$nonterminal};
+    push(@result, @$new_arg);
+    return { $nonterminal => \@result };
 }
 
 sub CodeProcess::do_class {
@@ -331,17 +360,6 @@ sub CodeProcess::do_simple_template_id {
     my %result;
     tie(%result, 'Tie::IxHash', 'template-name' => $_[1],  'template-argument-list' => [], 'match' => match_text());
     return { "simple-template-id" => \%result};
-}
-
-sub CodeProcess::do_template_argument_list_template_argument {
-    return { "template-argument-list" => [$_[1]] };
-}
-
-sub CodeProcess::do_template_argument_list_template_argument_list_template_argument {
-    my(undef, $args_so_far, undef, $new_arg) = @_;
-    my @result = @$$args_so_far{"template-argument-list"};
-    push(@result, @$new_arg);
-    return { "template-argument-list" => \@result };
 }
 
 DefConstructor('\@@listings@block {} {}',
