@@ -14,7 +14,7 @@
   <xsl:template match="ltx:note[@role='header']">
     <header>
       <xsl:attribute name="name"><xsl:value-of select="@class"/></xsl:attribute> 
-      <xsl:apply-templates/>
+      <xsl:apply-templates select="ltx:note[@role='declaration']"/>
     </header>
   </xsl:template>
 
@@ -31,24 +31,24 @@
       <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
       <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
       <xsl:for-each select="//ltx:note[@class='class-template-specialization' and descendant::ltx:note[@role='template-name']/text()=$primary-template-name]">
-	<xsl:call-template name="class-template-specialization"/>
+	<xsl:call-template name="declaration"/>
       </xsl:for-each>
     </class-template>
   </xsl:template>
 
-  <xsl:template name="class-template-specialization">
-    <class-template-specialization>
+  <xsl:template match="ltx:note" mode="auto">
+    <xsl:element name="{@role}">
+      <xsl:value-of select="text()"/>
+      <xsl:apply-templates select="*" mode="auto"/>
+    </xsl:element>
+  </xsl:template>
+  
+  <xsl:template name="declaration">
+    <xsl:element name="{@class}">
       <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
-      <template-name><xsl:value-of select=".//ltx:note[@role='template-name']"/></template-name>
-      <template-argument-list>
-	<xsl:for-each select=".//ltx:note[@role='template-argument-list']">
-	  <xsl:for-each select="ltx:note[@role='template-argument']">
-	    <template-argument><xsl:value-of select="."/></template-argument>
-	  </xsl:for-each>
-      </xsl:for-each>
-      </template-argument-list>
       <text><xsl:value-of select="./ltx:note[@role='text']"/></text>
-    </class-template-specialization>
+      <xsl:apply-templates select="*[@role != 'name']" mode="auto"/>
+    </xsl:element>
   </xsl:template>
 
   <xsl:template match="ltx:note[@role='declaration' and @class='macro']">
