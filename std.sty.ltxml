@@ -322,6 +322,7 @@ sub CodeProcess::do_class_template_specialization {
 }
 
 sub CodeProcess::do_macro {
+    print "doing a macro\n";
     $doc->openElement('ltx:note', role => 'declaration', class => 'macro');
     $doc->insertElement('ltx:note', $_[2], role => 'name');
     $doc->insertElement('ltx:note', match_text(), role => 'text');
@@ -423,5 +424,20 @@ DefConstructor('\testConst {} {}',
   locked => 1);
 
 #======================================================================
+DefConstructor('\foo', sub {
+    $doc = $_[0];
+    print "Running style file\n\n\n";
+    my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
+    $recce = Marpa::R2::Scanless::R->new(
+	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
+
+    my $input = '#define foo bar';
+    my $length_read = $recce->read( \$input );
+
+    do {
+	my $value_ref = $recce->value;
+	my $value = ${$value_ref};
+    } while ($@)
+	       });
 1;
 
