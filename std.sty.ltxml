@@ -69,7 +69,7 @@ statement ::= macro_def action=> do_grammar
     | enum_class_dec
     | enum_dec
     | comment
-    | type_specifier_seq action => do_grammar
+    | type_specifier_seq action => do_ignore
     | storage_class_specifier
     | operator
     | <ident>
@@ -273,6 +273,12 @@ sub CodeProcess::pass_through {
     return $_[1];
 }
 
+sub CodeProcess::do_ignore {
+    my $unignored = CodeProcess::do_grammar(@_);
+    my ($key) = keys %$unignored;
+    return { $key => { ignore => $$unignored{$key} } }
+}
+
 sub CodeProcess::do_grammar {
     my (undef, @args) = @_;
     my $rule_id     = $Marpa::R2::Context::rule;
@@ -294,9 +300,7 @@ sub CodeProcess::do_grammar {
     if($is_quantitative->($rule_id)) {
 	my $arg0 = $args[0];
 	my ($key) = keys %$arg0;
-	print "Key: ".$key."\n";
-	my @values = map { $$_{$key} } @args;
-	print "values: ".Dumper(\@values);
+	my @values = map { $$_{$key} } grep { $_} @args;
 	$result{$key} = \@values;
     } else {
 	map { my $arg = $_; map { $result{$_} = $$arg{$_} } keys %$arg; } @args;

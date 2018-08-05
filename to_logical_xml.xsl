@@ -18,6 +18,10 @@
     </header>
   </xsl:template>
 
+  <xsl:template match="ltx:note[@role='statements']">
+      <xsl:apply-templates select="." mode="auto"/>
+  </xsl:template>
+  
   <xsl:template match="ltx:note[@role='declaration' and @class='class']">
     <class>
       <xsl:attribute name="name"><xsl:value-of select="./ltx:note[@role='name']"/></xsl:attribute>
