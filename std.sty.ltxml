@@ -62,19 +62,19 @@ lexeme default = latm => 1
 
 statements ::= statement+ action => do_grammar
 statement ::= macro_def action=> do_grammar
-    | class_dec
-    | class_template_dec
-    | class_template_explicit_specialization
-    | type_alias_dec
-    | enum_class_dec
-    | enum_dec
-    | comment
+    | class_dec action => do_grammar
+    | class_template_dec action => do_grammar
+    | class_template_explicit_specialization action => do_grammar
+    | type_alias_dec action => do_grammar
+    | enum_class_dec action => do_grammar
+    | enum_dec action => do_grammar
+    | comment action => do_ignore
     | type_specifier_seq action => do_ignore
-    | storage_class_specifier
-    | operator
-    | <ident>
-    | punctuation
-    | template_dec
+    | storage_class_specifier action => do_ignore
+    | operator action => do_ignore
+    | identifier action => do_ignore
+    | punctuation action => do_ignore
+    | template_dec action => do_ignore
 
 
 macro_def ::= '#define' <ident> (RestOfLine) action => do_macro
@@ -84,11 +84,11 @@ class_template_dec ::= template_head <class keyword> <ident> non_angle  action =
 class_template_explicit_specialization ::= <template keyword> ('<') ('>') <class keyword> simple_template_id (RestOfLine) action => do_class_template_specialization
 enum_dec ::= <enum keyword> <ident> (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> <ident> ':' (RestOfLine) action => do_enum_class
-comment ::= '//' (RestOfLine)
-template_dec ::= template_head <ident> (RestOfLine)
-    | <template keyword> '<' '>' <ident> (RestOfLine)
-    | template_head punctuation (RestOfLine)
-    | <template keyword> '<' '>' punctuation (RestOfLine)
+comment ::= '//' (RestOfLine) action => do_capture_all
+template_dec ::= template_head <ident> (RestOfLine) action => do_capture_all
+    | <template keyword> '<' '>' <ident> (RestOfLine) action => do_capture_all
+    | template_head punctuation (RestOfLine) action => do_capture_all
+    | <template keyword> '<' '>' punctuation (RestOfLine) action => do_capture_all
 
 
 # A.4 Expressions
@@ -96,10 +96,10 @@ id_expression ::= unqualified_id action => do_grammar # TODO: Full definition
 unqualified_id ::= identifier action => do_grammar  # TODO: Full definition
 
 # A.6 Declarations
-storage_class_specifier ::= <static keyword>
-    | <thread_local keyword>
-    | <extern keyword>
-    | <mutable keyword>
+storage_class_specifier ::= <static keyword> action => do_capture
+    | <thread_local keyword> action => do_capture
+    | <extern keyword> action => do_capture
+    | <mutable keyword> action => do_capture
 
 type_specifier ::= simple_type_specifier action => do_grammar # TODO: Full definition
     | cv_qualifier action => do_grammar
@@ -120,7 +120,9 @@ type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
 # A.11 Overloading
 operator_function_id ::= (<operator keyword>) operator
 
-operator ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete keyword> '[]'
+operator ::= operator_raw action => do_operator
+
+operator_raw ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete keyword> '[]'
     | '()' | '[]' | '->' | '->*' 
     | '~' | '!' | '+' | '-' | '*' | '/' | '%' | '^' | '&' | '|'
     | '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '^=' | '&=' | '|=' | '==' | '!='
@@ -165,10 +167,11 @@ template_argument_list ::= template_argument action => do_list # TODO: actions
 template_argument ::= type_id action => do_capture # TODO: Full definition
 
 identifier ::= <ident> action => do_capture
+punctuation ::= <punctuation token> action => do_capture
 ellipses ::= (<ellipses keyword>) action => do_capture
 
 <ident> ~ [\w]+
-punctuation ~ [^\s\w]+
+<punctuation token> ~ [^\s\w]+
 non_angle_char ~ [^<>]
 non_angle ~ non_angle_char
 
@@ -318,6 +321,15 @@ sub CodeProcess::do_capture {
     return { $nonterminal => $_[1] };
 }
 
+sub CodeProcess::do_capture_all {
+    my (undef, @args) = @_;
+    my $rule_id     = $Marpa::R2::Context::rule;
+    my $slg         = $Marpa::R2::Context::slg;
+    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
+    $nonterminal=~s/_/-/g;
+    return { $nonterminal => \@args };
+}
+
 sub CodeProcess::do_list {
     my (undef, @args) = @_;
     my $rule_id     = $Marpa::R2::Context::rule;
@@ -394,7 +406,7 @@ sub CodeProcess::do_enum {
     }
 }
 
-
+# A.6 Declarations
 sub CodeProcess::do_type_specifier_seq {
     (undef, my @args) = @_;
     # Follow the rules in dcl.type/2 for valid type-specifier-seqs
@@ -407,6 +419,14 @@ sub CodeProcess::do_type_specifier_seq {
     }
 	
     return CodeProcess::do_grammar(@_);
+}
+
+# A.11 Overloading
+sub CodeProcess::do_operator {
+    my (undef, @args) = @_;
+    my $args0 = $args[0];
+    my (undef, @tokens) = @$args0;
+    return { operator => join('', @tokens) }
 }
 
 # A.12 Templates
@@ -485,8 +505,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
     my $input = << 'EOF';
-#define foo bar
-const x volatile volatile
+new[]
 EOF
     print "Starting\n";
     my $length_read = $recce->read( \$input );
@@ -495,6 +514,7 @@ EOF
 	eval {
 	    $value_ref = $recce->value;
 	};
+	print $@;
     } while ($@);
     insertXML($doc, $$value_ref);
 	       });
