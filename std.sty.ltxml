@@ -14,7 +14,7 @@ package LaTeXML::Package::Pool;
 use strict;
 use warnings;
 use LaTeXML::Package;
-use String::Util 'crunch';
+use String::Util 'trim';
 use Marpa::R2;
 use Data::Dumper;
 use Tie::IxHash;
@@ -23,7 +23,6 @@ LoadPool('LaTeX');
 RequirePackage('listings');
 
 DefMacro('\Cpp', 'C++');
-DefMacro('\Cpp', 'D++');
 NewCounter('InHeader');
     
 DefMacro('\rSec Number [] Plain', sub {
@@ -61,8 +60,8 @@ lexeme default = latm => 1
 
 :start ::= statements
 
-statements ::= statement+
-statement ::= macro_def
+statements ::= statement+ action => do_grammar
+statement ::= macro_def action=> do_grammar
     | class_dec
     | class_template_dec
     | class_template_explicit_specialization
@@ -70,7 +69,7 @@ statement ::= macro_def
     | enum_class_dec
     | enum_dec
     | comment
-    | type_specifier_seq
+    | type_specifier_seq action => do_grammar
     | storage_class_specifier
     | operator
     | <ident>
@@ -102,15 +101,20 @@ storage_class_specifier ::= <static keyword>
     | <extern keyword>
     | <mutable keyword>
 
-type_specifier ::= simple_type_specifier action => pass_through # TODO: Full definition
+type_specifier ::= simple_type_specifier action => do_grammar # TODO: Full definition
+    | cv_qualifier action => do_grammar
 
-type_specifier_seq ::= type_specifier+ action => do_join # TODO: Full definition
+type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
 
 simple_type_specifier ::= type_name action => pass_through # TODO: Full definition
 
-type_name ::= <ident> action => pass_through # TODO: Correct definition
+type_name ::= identifier action => do_grammar # TODO: Correct definition
 
 #A.7 Declarators
+cv_qualifier ::= <const keyword> action => do_capture | <volatile keyword> action => do_capture
+
+cv_qualifier_seq ::= cv_qualifier+ action => do_grammar;
+
 type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
 
 # A.11 Overloading
@@ -172,6 +176,9 @@ non_angle ~ non_angle_char
 :lexeme ~ <class keyword> priority => 1
 <class keyword> ~ 'class'
 
+:lexeme ~ <const keyword> priority => 1
+<const keyword> ~ 'const'
+
 :lexeme ~ <delete keyword> priority => 1
 <delete keyword> ~ 'delete'
 
@@ -202,6 +209,9 @@ non_angle ~ non_angle_char
 :lexeme ~ <typename keyword> priority => 1
 <typename keyword> ~ 'typename'
 
+:lexeme ~ <volatile keyword> priority => 1
+<volatile keyword> ~ 'volatile'
+
 :lexeme ~ <ellipses keyword> priority => 1
 <ellipses keyword> ~ '...'
 
@@ -229,14 +239,21 @@ sub insertXML {
     my ($doc, $tree) = @_;
     if(ref($tree) eq "") {
 	$doc->absorb($tree);
-    } elsif(ref($tree) eq "HASH") {
-	foreach my $key (keys %$tree) {
+	return;
+    }
+    foreach my $key (keys %$tree) {
+	if(ref($$tree{$key}) eq "ARRAY") {
+	    my $values = $$tree{$key};
+	    foreach my $value (@$values) {
+		$doc->openElement('ltx:note', role => $key);
+		insertXML($doc, $value);
+		$doc->closeElement('ltx:note');
+	    }
+	} else {
 	    $doc->openElement('ltx:note', role => $key);
 	    insertXML($doc, $$tree{$key});
 	    $doc->closeElement('ltx:note');
 	}
-    } elsif(ref($tree) eq "ARRAY") {
-	map { insertXML($doc, $_) } @$tree;
     }
 }
 
@@ -244,11 +261,11 @@ sub match_text {
     my @g1 = Marpa::R2::Context::location();
     my @span1 = $recce->g1_location_to_span($g1[0]);
     my @span2 = $recce->g1_location_to_span($g1[1]);
-    return crunch($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
+    return trim($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
 }
     
 sub CodeProcess::do_dump {
-    print match_text()."\n";
+    print "matched: ".match_text()."\n";
     print Dumper(@_);
 }
 
@@ -260,11 +277,30 @@ sub CodeProcess::do_grammar {
     my (undef, @args) = @_;
     my $rule_id     = $Marpa::R2::Context::rule;
     my $slg         = $Marpa::R2::Context::slg;
+
+    my $is_quantitative = sub {
+	my ($rule_id) = @_;
+	if (substr($slg->rule_show($rule_id), -1) eq "+") {
+	    return 1;
+	}
+	return 0;
+    };
+    
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
     my %result;
     tie(%result, 'Tie::IxHash');
-    map { my $arg = $_; map { $result{$_} = $$arg{$_} } keys %$arg; } @args;
+
+    if($is_quantitative->($rule_id)) {
+	my $arg0 = $args[0];
+	my ($key) = keys %$arg0;
+	print "Key: ".$key."\n";
+	my @values = map { $$_{$key} } @args;
+	print "values: ".Dumper(\@values);
+	$result{$key} = \@values;
+    } else {
+	map { my $arg = $_; map { $result{$_} = $$arg{$_} } keys %$arg; } @args;
+    }
     $result{match} = match_text();
     return { $nonterminal => \%result };
 }
@@ -294,66 +330,79 @@ sub CodeProcess::do_list {
 }
 
 sub CodeProcess::do_class {
-    print "in class\n";
-    $doc->openElement('ltx:note', role => 'declaration', class => 'class');
-    $doc->insertElement('ltx:note', $_[2], role => 'name');
-    $doc->insertElement('ltx:note', match_text(), role => 'text');
-    $doc->closeElement('ltx:note');
+    return { 'class-template' => {
+	name => $_[2],
+	match => match_text
+	     }
+    }
 }
 
 sub CodeProcess::do_class_template {
-    $doc->openElement('ltx:note', role => 'declaration', class => 'class-template');
-    $doc->insertElement('ltx:note', $_[3], role => 'name');
-    $doc->insertElement('ltx:note', match_text(), role => 'text');
-    $doc->closeElement('ltx:note');
+    return { 'class-template' => {
+	name => $_[3],
+	match => match_text
+	     }
+    }
 }
 
 sub CodeProcess::do_class_template_specialization {
     print "Class_template_specialization\n";
-    my $rule_id     = $Marpa::R2::Context::rule;
-    my $slg         = $Marpa::R2::Context::slg;
 
     my $simple_template_id = $_[3];
-    $doc->openElement('ltx:note', role => 'declaration', class => 'class-template-specialization');
-    $doc->insertElement('ltx:note', $$simple_template_id{'simple-template-id'}{match}, role => 'name');
-    insertXML($doc, $simple_template_id);
-    $doc->insertElement('ltx:note', match_text(), role => 'text');
-    $doc->closeElement('ltx:note');
+    return { 'class-template-specialization' => {
+	name => $$simple_template_id{'simple-template-id'}{match},
+	map { $_ =>  $$simple_template_id{$_}} keys %$simple_template_id,
+	match => match_text
+	     }
+    }
 }
 
 sub CodeProcess::do_macro {
     print "doing a macro\n";
-    $doc->openElement('ltx:note', role => 'declaration', class => 'macro');
-    $doc->insertElement('ltx:note', $_[2], role => 'name');
-    $doc->insertElement('ltx:note', match_text(), role => 'text');
-    $doc->closeElement('ltx:note');
+    return { macro => {
+	name => $_[2],
+	match => match_text
+	     }
+    }
 }
 
 sub CodeProcess::do_type_alias {
-    $doc->openElement('ltx:note', role => 'declaration', class => 'type-alias');
-    $doc->insertElement('ltx:note', $_[2], role => 'name');
-    $doc->insertElement('ltx:note', match_text(), role => 'text');
-    $doc->closeElement('ltx:note');
+    return { 'type-alias' => {
+	name => $_[2],
+	match => match_text
+	     }
+    }
 }
 
 sub CodeProcess::do_enum_class {
-    $doc->openElement('ltx:note', role => 'declaration', class => 'enum-class');
-    $doc->insertElement('ltx:note', $_[3], role => 'name');
-    $doc->insertElement('ltx:note', match_text(), role => 'text');
-    $doc->closeElement('ltx:note');
+    return { 'enum-class' => {
+	name => $_[3],
+	match => match_text
+	     }
+    }
 }
 
 sub CodeProcess::do_enum {
-    $doc->openElement('ltx:note', role => 'declaration', class => 'enum');
-    $doc->insertElement('ltx:note', $_[3], role => 'name');
-    $doc->insertElement('ltx:note', match_text(), role => 'text');
-    $doc->closeElement('ltx:note');
+    return { 'enum' => {
+	name => $_[3],
+	match => match_text
+	     }
+    }
 }
 
 
-sub CodeProcess::do_join {
+sub CodeProcess::do_type_specifier_seq {
     (undef, my @args) = @_;
-    return join(' ', @args);
+    # Follow the rules in dcl.type/2 for valid type-specifier-seqs
+    my %counts = ( const => 0, volatile => 0 );
+    map { my $match = $$_{'type-specifier'}{match};
+	  $counts{$match}++;
+    } @args;
+    if($counts{const} > 1 || $counts{volatile} > 1) {
+	Marpa::R2::Context::bail("Duplicate const or volatile (dcl.type/2): ".match_text());
+    }
+	
+    return CodeProcess::do_grammar(@_);
 }
 
 # A.12 Templates
@@ -431,13 +480,20 @@ DefConstructor('\foo', sub {
     $recce = Marpa::R2::Scanless::R->new(
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
-    my $input = '#define foo bar';
+    my $input = << 'EOF';
+#define foo bar
+const x volatile volatile
+EOF
+    print "Starting\n";
     my $length_read = $recce->read( \$input );
-
+    my $value_ref;
     do {
-	my $value_ref = $recce->value;
-	my $value = ${$value_ref};
-    } while ($@)
+	eval {
+	    $value_ref = $recce->value;
+	};
+    } while ($@);
+    insertXML($doc, $$value_ref);
 	       });
+ 
 1;
 
