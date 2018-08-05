@@ -4,7 +4,7 @@
     xmlns:ltx = "http://dlmf.nist.gov/LaTeXML"
     exclude-result-prefixes="ltx">
   <xsl:output method="xml" indent="yes"/>
-
+  <xsl:param name="show-ignore" select="false"/>
   <xsl:template match="/">
     <standard>
       <xsl:apply-templates/>
@@ -20,6 +20,19 @@
 
   <xsl:template match="ltx:note[@role='statements']">
       <xsl:apply-templates select="." mode="auto"/>
+  </xsl:template>
+  
+  <xsl:template match="ltx:note[@role='ignore']" mode="override">
+    <xsl:element name="{@role}">
+      <xsl:value-of select="text()"/>
+      <xsl:apply-templates select="*" mode="auto"/>
+    </xsl:element>
+  </xsl:template>
+
+  <xsl:template match="ltx:note[@role='ignore']" mode="auto">
+    <xsl:if test="$show-ignore='true'">
+      <xsl:apply-templates select="." mode="override"/>
+    </xsl:if>
   </xsl:template>
   
   <xsl:template match="ltx:note[@role='declaration' and @class='class']">
