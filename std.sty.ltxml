@@ -107,6 +107,21 @@ type_specifier ::= simple_type_specifier action => do_grammar # TODO: Full defin
 type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
 
 simple_type_specifier ::= type_name action => pass_through # TODO: Full definition
+    | <char keyword> action => do_capture
+    | <char16_t keyword> action => do_capture
+    | <char32_t keyword> action => do_capture
+    | <wchar_t keyword> action => do_capture
+    | <bool keyword> action => do_capture
+    | <short keyword> action => do_capture
+    | <int keyword> action => do_capture
+    | <long keyword> action => do_capture
+    | <signed keyword> action => do_capture
+    | <unsigned keyword> action => do_capture
+    | <float keyword> action => do_capture
+    | <double keyword> action => do_capture
+    | <void keyword> action => do_capture
+    | <auto keyword> action => do_capture
+
 
 type_name ::= identifier action => do_grammar # TODO: Correct definition
 
@@ -181,6 +196,21 @@ non_angle_char ~ [^<>]
 non_angle ~ non_angle_char
 
 # Keywords
+:lexeme ~ <auto keyword> priority => 1
+<auto keyword> ~ 'auto'
+
+:lexeme ~ <bool keyword> priority => 1
+<bool keyword> ~ 'bool'
+
+:lexeme ~ <char keyword> priority => 1
+<char keyword> ~ 'char'
+
+:lexeme ~ <char16_t keyword> priority => 1
+<char16_t keyword> ~ 'char16_t'
+
+:lexeme ~ <char32_t keyword> priority => 1
+<char32_t keyword> ~ 'char32_t'
+
 :lexeme ~ <class keyword> priority => 1
 <class keyword> ~ 'class'
 
@@ -190,11 +220,23 @@ non_angle ~ non_angle_char
 :lexeme ~ <delete keyword> priority => 1
 <delete keyword> ~ 'delete'
 
+:lexeme ~ <double keyword> priority => 1
+<double keyword> ~ 'double'
+
 :lexeme ~ <enum keyword> priority => 1
 <enum keyword> ~ 'enum'
 
 :lexeme ~ <extern keyword> priority => 1
 <extern keyword> ~ 'extern'
+
+:lexeme ~ <float keyword> priority => 1
+<float keyword> ~ 'float'
+
+:lexeme ~ <int keyword> priority => 1
+<int keyword> ~ 'int'
+
+:lexeme ~ <long keyword> priority => 1
+<long keyword> ~ 'long'
 
 :lexeme ~ <mutable keyword> priority => 1
 <mutable keyword> ~ 'mutable'
@@ -204,6 +246,12 @@ non_angle ~ non_angle_char
 
 :lexeme ~ <operator keyword> priority => 1
 <operator keyword> ~ 'operator'
+
+:lexeme ~ <short keyword> priority => 1
+<short keyword> ~ 'short'
+
+:lexeme ~ <signed keyword> priority => 1
+<signed keyword> ~ 'signed'
 
 :lexeme ~ <static keyword> priority => 1
 <static keyword> ~ 'static'
@@ -223,8 +271,17 @@ non_angle ~ non_angle_char
 :lexeme ~ <union keyword> priority => 1
 <union keyword> ~ 'union'
 
+:lexeme ~ <unsigned keyword> priority => 1
+<unsigned keyword> ~ 'unsigned'
+
+:lexeme ~ <void keyword> priority => 1
+<void keyword> ~ 'void'
+
 :lexeme ~ <volatile keyword> priority => 1
 <volatile keyword> ~ 'volatile'
+
+:lexeme ~ <wchar_t keyword> priority => 1
+<wchar_t keyword> ~ 'wchar_t'
 
 :lexeme ~ <ellipses keyword> priority => 1
 <ellipses keyword> ~ '...'
