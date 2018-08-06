@@ -81,7 +81,7 @@ macro_def ::= '#define' <ident> (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' <ident> '=' (RestOfLine) action => do_type_alias
 class_dec ::= <class keyword> <ident>  (RestOfLine) action => do_class
 class_template_dec ::= template_head <class keyword> <ident> non_angle  action => do_class_template
-class_template_explicit_specialization ::= <template keyword> ('<') ('>') <class keyword> simple_template_id (RestOfLine) action => do_class_template_specialization
+class_template_explicit_specialization ::= (<template keyword>) ('<') ('>') class_key simple_template_id (RestOfLine) action => do_grammar
 enum_dec ::= <enum keyword> <ident> (RestOfLine) action => do_enum
 enum_class_dec ::= <enum keyword> <class keyword> <ident> ':' (RestOfLine) action => do_enum_class
 comment ::= '//' (RestOfLine) action => do_capture_all
@@ -116,6 +116,11 @@ cv_qualifier ::= <const keyword> action => do_capture | <volatile keyword> actio
 cv_qualifier_seq ::= cv_qualifier+ action => do_grammar;
 
 type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
+
+# A.8 Classes
+class_key ::= <class keyword> action => do_capture
+    | <struct keyword> action => do_capture
+    | <union keyword> action => do_capture
 
 # A.11 Overloading
 operator_function_id ::= (<operator keyword>) operator
@@ -203,6 +208,9 @@ non_angle ~ non_angle_char
 :lexeme ~ <static keyword> priority => 1
 <static keyword> ~ 'static'
 
+:lexeme ~ <struct keyword> priority => 1
+<struct keyword> ~ 'struct'
+
 :lexeme ~ <template keyword> priority => 1
 <template keyword> ~ 'template'
 
@@ -211,6 +219,9 @@ non_angle ~ non_angle_char
 
 :lexeme ~ <typename keyword> priority => 1
 <typename keyword> ~ 'typename'
+
+:lexeme ~ <union keyword> priority => 1
+<union keyword> ~ 'union'
 
 :lexeme ~ <volatile keyword> priority => 1
 <volatile keyword> ~ 'volatile'
@@ -240,25 +251,43 @@ my $doc;
 
 sub insertXML {
     my ($doc, $tree) = @_;
-
+    my $ignore = 0;
     if(ref($tree) eq "") {
 	$doc->absorb($tree);
 	return;
     }
+    
     if(ref($tree) ne "HASH") {
-	print Dumper($tree);
+	print "***** Not a hash: ". Dumper($tree);
     }
+    
     foreach my $key (keys %$tree) {
-	if(ref($$tree{$key}) eq "ARRAY") {
-	    my $values = $$tree{$key};
-	    foreach my $value (@$values) {
-		$doc->openElement('ltx:note', role => $key);
-		insertXML($doc, $value);
+	my $content = $$tree{$key};
+	if(ref($content) eq "ARRAY") {
+	    foreach my $value (@$content) {
+		my @attributes;
+		if(ref($value) eq "HASH") {
+		    my ($childKey) = keys %$value;
+		    if($childKey eq 'ignore') {
+			@attributes = (class => 'ignore');
+			$value = $$value{$childKey};
+		    }
+		}
+		$doc->openElement('ltx:note', role => $key, @attributes);
+		insertXML($doc, $value, $ignore);
 		$doc->closeElement('ltx:note');
 	    }
 	} else {
-	    $doc->openElement('ltx:note', role => $key);
-	    insertXML($doc, $$tree{$key});
+	    my @attributes;
+	    if(ref($content) eq "HASH") {
+		my ($childKey) = keys %$content;
+		if($childKey eq 'ignore') {
+		    @attributes = (class => 'ignore');
+		    $content = $$content{$childKey};
+		}
+	    }
+	    $doc->openElement('ltx:note', role => $key, @attributes);
+	    insertXML($doc, $content);
 	    $doc->closeElement('ltx:note');
 	}
     }
@@ -273,7 +302,6 @@ sub match_text {
     
 sub CodeProcess::do_dump {
     print "matched: ".match_text()."\n";
-    print Dumper(@_);
 }
 
 sub CodeProcess::pass_through {
@@ -367,12 +395,14 @@ sub CodeProcess::do_class_template {
 
 sub CodeProcess::do_class_template_specialization {
     print "Class_template_specialization\n";
-
     my $simple_template_id = $_[3];
+    my %result;
+    tie(%result, 'Tie::IxHash');
+
     return { 'class-template-specialization' => {
 	name => $$simple_template_id{'simple-template-id'}{match},
 	map { $_ =>  $$simple_template_id{$_}} keys %$simple_template_id,
-	match => match_text
+	match => match_text()
 	     }
     }
 }
@@ -515,18 +545,17 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
     my $input = << 'EOF';
-  template<class IntType>
-    constexpr IntType to_integer(byte b) noexcept;
+  const x;
+  template<> class numeric_limits<bool>;
 EOF
-    print "Starting\n";
     my $length_read = $recce->read( \$input );
     my $value_ref;
     do {
 	eval {
 	    $value_ref = $recce->value;
 	};
-	print $@;
     } while ($@);
+
     insertXML($doc, $$value_ref);
 	       });
  
