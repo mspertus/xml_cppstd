@@ -130,7 +130,7 @@ operator_raw ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete
     | '++' | '--' | ','
 
 # A.12 Templates
-template_head ::= (<template keyword>) ('<') template_parameter_list ('>') # TODO: Full definition
+template_head ::= (<template keyword>) ('<') template_parameter_list ('>') action => do_grammar # TODO: Full definition
 
 template_parameter_list ::= template_parameter action => do_list
     | template_parameter_list (',') template_parameter action => do_list
@@ -240,9 +240,13 @@ my $doc;
 
 sub insertXML {
     my ($doc, $tree) = @_;
+
     if(ref($tree) eq "") {
 	$doc->absorb($tree);
 	return;
+    }
+    if(ref($tree) ne "HASH") {
+	print Dumper($tree);
     }
     foreach my $key (keys %$tree) {
 	if(ref($$tree{$key}) eq "ARRAY") {
@@ -454,8 +458,14 @@ DefConstructor('\@@listings@block {} {}',
 		       $recce = Marpa::R2::Scanless::R->new( { grammar => $grammar,
 							       semantics_package => 'CodeProcess' } );
 		       my $length_read = $recce->read( \$listings_data );
-		       my $value_ref = $recce->value;
-		       my $value = ${$value_ref};
+		       my $value_ref;
+		       do {
+			   eval {
+			       $value_ref = $recce->value;
+			   };
+			   print $@;
+		       } while ($@);
+		       insertXML($doc, $$value_ref);
 		       $document->closeElement('ltx:note');
 		   }
 		   $document->insertElement('ltx:listing',
@@ -505,7 +515,8 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
     my $input = << 'EOF';
-new[]
+  template<class IntType>
+    constexpr IntType to_integer(byte b) noexcept;
 EOF
     print "Starting\n";
     my $length_read = $recce->read( \$input );
