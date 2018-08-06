@@ -14,7 +14,7 @@
   <xsl:template match="ltx:note[@role='header']">
     <header>
       <xsl:attribute name="name"><xsl:value-of select="@class"/></xsl:attribute> 
-      <xsl:apply-templates select="ltx:note[@role='declaration']"/>
+      <xsl:apply-templates select="ltx:note[@role='statements']"/>
     </header>
   </xsl:template>
 
@@ -29,9 +29,12 @@
     </xsl:element>
   </xsl:template>
 
-  <xsl:template match="ltx:note[@role='ignore']" mode="auto">
+  <xsl:template match="ltx:note[@class='ignore']" mode="auto">
     <xsl:if test="$show-ignore='true'">
-      <xsl:apply-templates select="." mode="override"/>
+      <xsl:element name="{@role}">
+	<xsl:value-of select="text()"/>
+	<xsl:apply-templates select="*" mode="auto"/>
+      </xsl:element>
     </xsl:if>
   </xsl:template>
   
