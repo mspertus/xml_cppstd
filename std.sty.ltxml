@@ -100,12 +100,12 @@ declaration ::= simple_declaration action => do_grammar
     | type_alias_dec action => do_grammar
     | enum_class_dec action => do_grammar
     | enum_dec action => do_grammar
-    | comment action => do_ignore
-    | storage_class_specifier action => do_ignore
-    | operator action => do_ignore
-    | identifier action => do_ignore
-    | punctuation action => do_ignore
-    | template_dec action => do_ignore
+    | comment action => do_ignore rank => -1
+    | storage_class_specifier action => do_ignore rank => -1
+    | operator action => do_ignore rank => -1
+    | identifier action => do_ignore rank => -1
+    | punctuation action => do_ignore rank => -1
+    | template_dec action => do_ignore rank => -1
 
 
 simple_declaration ::= decl_specifier_seq action => do_grammar
@@ -195,8 +195,8 @@ ptr_declarator ::= noptr_declarator action => do_grammar
 noptr_declarator ::= declarator_id action => do_grammar # TODO: Full definition
     | noptr_declarator parameters_and_qualifiers action => do_grammar
 
-parameters_and_qualifiers ::= '(' parameter_declaration_clause ')' action => do_grammar # TODO: Full definition
-    | '(' ')' action => do_grammar
+parameters_and_qualifiers ::= ('(') parameter_declaration_clause (')') action => do_grammar # TODO: Full definition
+    | ('(') (')') action => do_grammar
 
 ptr_operator ::= '*' action => do_capture # TODO: Full definition
     | '&' action => do_capture
@@ -707,7 +707,8 @@ DefConstructor('\@@listings@block {} {}',
 		       $document->openElement('ltx:note', role => 'header', class => $headerName);
 		       # my $value_ref = $grammar->parse( \$listings_data, 'CodeProcess');
 		       $recce = Marpa::R2::Scanless::R->new( { grammar => $grammar,
-							       semantics_package => 'CodeProcess' } );
+							       semantics_package => 'CodeProcess',
+							     ranking_method => 'rule' } );
 		       my $length_read = $recce->read( \$listings_data );
 		       my $value_ref;
 		       do {
@@ -762,7 +763,7 @@ DefConstructor('\foo', sub {
     print "Running style file\n\n\n";
     my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
     $recce = Marpa::R2::Scanless::R->new(
-	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
+	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
   [[noreturn]] void abort() noexcept;
