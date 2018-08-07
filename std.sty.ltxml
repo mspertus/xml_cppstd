@@ -21,7 +21,7 @@ use Data::Dumper;
 use Tie::IxHash;
 
 LoadPool('LaTeX');
-RequirePackage('listings');
+# RequirePackage('listings');
 
 DefMacro('\Cpp', 'C++');
 NewCounter('InHeader');
@@ -75,6 +75,9 @@ template_dec ::= template_head <ident> (RestOfLine) action => do_capture_all
     | <template keyword> '<' '>' punctuation (RestOfLine) action => do_capture_all
 
 # A.2 Lexical Conventions
+token ::= identifier action => do_grammar # TODO: Full definition and propagate changes to balanced_token
+    | operator action => do_grammar
+
 string_literal ::= ('"') s_char_sequence ('"') action => do_capture
 
 s_char_sequence ~ s_char+
@@ -96,6 +99,7 @@ declaration ::= namespace_definition action => do_grammar
     | type_alias_dec action => do_grammar
     | enum_class_dec action => do_grammar
     | enum_dec action => do_grammar
+    | attribute_specifier action => do_ignore
     | comment action => do_ignore
     | type_specifier_seq action => do_ignore
     | storage_class_specifier action => do_ignore
@@ -144,6 +148,25 @@ namespace_body ::= declaration_seq action => do_grammar;
 linkage_specification ::= (<extern keyword>) string_literal ('{') ('}') action => do_grammar
     | (<extern keyword>) string_literal ('{') declaration_seq ('}') action => do_grammar
     |  (<extern keyword>) string_literal declaration action => do_grammar
+
+attribute_specifier ::= ('[') ('[') attribute_list (']') (']') action => do_grammar 
+
+attribute_list ::= attribute+ separator => <comma keyword> action => do_grammar # TODO: full specification
+
+attribute ::= attribute_token action => do_grammar
+    | attribute_token attribute_argument_clause action => do_grammar
+
+attribute_token ::= identifier action => do_grammar # TODO: full definition
+
+attribute_argument_clause ::= ('(') (')') action => do_capture
+    | ('(') (')') action => do_grammar
+
+balanced_token_seq ::= balanced_token+ action => do_grammar
+
+balanced_token ::= '(' balanced_token_seq ')' action => do_balanced_token
+    | '[' balanced_token_seq ']' action => do_balanced_token
+    | '{' balanced_token_seq '}' action => do_balanced_token
+    | token action => do_grammar # TODO: Change when tokens include grouping characters
 
 #A.7 Declarators
 cv_qualifier ::= <const keyword> action => do_capture | <volatile keyword> action => do_capture
@@ -214,7 +237,7 @@ punctuation ::= <punctuation token> action => do_capture
 ellipses ::= (<ellipses keyword>) action => do_capture
 
 <ident> ~ [\w]+
-<punctuation token> ~ [^\s\w]+
+<punctuation token> ~ [^\s\w]
 non_angle_char ~ [^<>]
 non_angle ~ non_angle_char
 non_at ~ [^@]+
@@ -312,6 +335,8 @@ non_at ~ [^@]+
 
 :lexeme ~ <wchar_t keyword> priority => 1
 <wchar_t keyword> ~ 'wchar_t'
+
+<comma keyword> ~ ','
 
 :lexeme ~ <ellipses keyword> priority => 1
 <ellipses keyword> ~ '...'
@@ -596,6 +621,18 @@ sub CodeProcess::do_type_specifier_seq {
     return CodeProcess::do_grammar(@_);
 }
 
+sub CodeProcess::do_balanced_token {
+    my (undef, @args) = @_;
+    my $balanced_token_seq = $args[1];
+    my %result;
+    tie(%result, 'Tie::IxHash', 
+	punctuator => $args[0], 
+	'balanced-token-seq' => $$balanced_token_seq{'balanced-token-seq'},
+	punctuator => $args[0],
+	'match' => match_text());
+    return { balanced_token => \%result };
+}
+
 # A.11 Overloading
 sub CodeProcess::do_operator {
     my (undef, @args) = @_;
@@ -685,29 +722,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
     my $input = << 'EOF';
-namespace std {
-  using size_t = @\seebelow@;
-  using div_t = @\seebelow@;
-  using ldiv_t = @\seebelow@;
-  using lldiv_t = @\seebelow@;
-}
-
-#define NULL @\seebelow@
-#define EXIT_FAILURE @\seebelow@
-#define EXIT_SUCCESS @\seebelow@
-#define RAND_MAX @\seebelow@
-#define MB_CUR_MAX @\seebelow@
-
-namespace std {
-  // Exposition-only function type aliases
-  extern "C" using @\placeholdernc{c-atexit-handler}@ = void();                        // \expos
-  extern "C++" using @\placeholdernc{atexit-handler}@ = void();                        // \expos
-  extern "C" using @\placeholdernc{c-compare-pred}@ = int(const void*, const void*);   // \expos
-  extern "C++" using @\placeholdernc{compare-pred}@ = int(const void*, const void*);   // \expos
-
-  // \ref{support.start.term}, start and termination
-  // [[noreturn]] void abort() noexcept;
-}
+  [[noreturn]]
 EOF
     my $length_read = $recce->read( \$input );
     my $value_ref;
