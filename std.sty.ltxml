@@ -108,10 +108,10 @@ declaration ::= simple_declaration action => do_grammar
     | template_dec action => do_ignore rank => -1
 
 
-simple_declaration ::= decl_specifier_seq action => do_grammar
-    | decl_specifier_seq init_declarator_list action => do_grammar
-    | attribute_specifier_seq decl_specifier_seq action => do_grammar
-    | attribute_specifier_seq decl_specifier_seq init_declarator_list action => do_grammar
+simple_declaration ::= decl_specifier_seq (';') action => do_grammar
+    | decl_specifier_seq init_declarator_list (';') action => do_grammar
+    | attribute_specifier_seq decl_specifier_seq (';') action => do_grammar
+    | attribute_specifier_seq decl_specifier_seq init_declarator_list (';') action => do_grammar
 
 decl_specifier ::= storage_class_specifier action => do_grammar # TODO: Full definition
     | defining_type_specifier action => do_grammar
@@ -766,7 +766,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
-  [[noreturn]] void abort() noexcept;
+  [[noreturn]] void abort();
 EOF
     my $length_read = $recce->read( \$input );
     my $value_ref;
