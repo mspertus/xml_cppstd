@@ -62,7 +62,7 @@ lexeme default = latm => 1
 :start ::= declaration_seq
 
 macro_def ::= '#define' <ident> (RestOfLine) action => do_macro
-type_alias_dec ::= 'using' <ident> '=' (RestOfLine) action => do_type_alias
+type_alias_dec ::= <using keyword> <ident> '=' (RestOfLine) action => do_type_alias
 class_dec ::= <class keyword> <ident>  (RestOfLine) action => do_class
 class_template_dec ::= template_head <class keyword> <ident> non_angle  action => do_class_template
 class_template_explicit_specialization ::= (<template keyword>) ('<') ('>') class_key simple_template_id (RestOfLine) action => do_grammar
@@ -286,6 +286,9 @@ non_angle ~ non_angle_char
 
 :lexeme ~ <unsigned keyword> priority => 1
 <unsigned keyword> ~ 'unsigned'
+
+:lexeme ~ <using keyword> priority => 1
+<using keyword> ~ 'using'
 
 :lexeme ~ <void keyword> priority => 1
 <void keyword> ~ 'void'
