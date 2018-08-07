@@ -100,7 +100,6 @@ declaration ::= simple_declaration action => do_grammar
     | type_alias_dec action => do_grammar
     | enum_class_dec action => do_grammar
     | enum_dec action => do_grammar
-    | attribute_specifier action => do_ignore
     | comment action => do_ignore
     | storage_class_specifier action => do_ignore
     | operator action => do_ignore
@@ -111,6 +110,8 @@ declaration ::= simple_declaration action => do_grammar
 
 simple_declaration ::= decl_specifier_seq action => do_grammar
     | decl_specifier_seq init_declarator_list action => do_grammar
+    | attribute_specifier_seq decl_specifier_seq action => do_grammar
+    | attribute_specifier_seq decl_specifier_seq init_declarator_list action => do_grammar
 
 decl_specifier ::= storage_class_specifier action => do_grammar # TODO: Full definition
     | defining_type_specifier action => do_grammar
@@ -159,6 +160,8 @@ namespace_body ::= declaration_seq action => do_grammar;
 linkage_specification ::= (<extern keyword>) string_literal ('{') ('}') action => do_grammar
     | (<extern keyword>) string_literal ('{') declaration_seq ('}') action => do_grammar
     |  (<extern keyword>) string_literal declaration action => do_grammar
+
+attribute_specifier_seq ::= attribute_specifier+ action => do_grammar
 
 attribute_specifier ::= ('[') ('[') attribute_list (']') (']') action => do_grammar 
 
@@ -762,7 +765,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
     my $input = << 'EOF';
-    long int x;
+  [[noreturn]] void abort() noexcept;
 EOF
     my $length_read = $recce->read( \$input );
     my $value_ref;
