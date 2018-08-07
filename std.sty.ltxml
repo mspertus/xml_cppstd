@@ -59,24 +59,7 @@ my $dsl = <<'END_OF_DSL';
 :default ::= action => [name,values]
 lexeme default = latm => 1
 
-:start ::= statements
-
-statements ::= statement+ action => do_grammar
-statement ::= macro_def action=> do_grammar
-    | class_dec action => do_grammar
-    | class_template_dec action => do_grammar
-    | class_template_explicit_specialization action => do_grammar
-    | type_alias_dec action => do_grammar
-    | enum_class_dec action => do_grammar
-    | enum_dec action => do_grammar
-    | comment action => do_ignore
-    | type_specifier_seq action => do_ignore
-    | storage_class_specifier action => do_ignore
-    | operator action => do_ignore
-    | identifier action => do_ignore
-    | punctuation action => do_ignore
-    | template_dec action => do_ignore
-
+:start ::= declaration_seq
 
 macro_def ::= '#define' <ident> (RestOfLine) action => do_macro
 type_alias_dec ::= 'using' <ident> '=' (RestOfLine) action => do_type_alias
@@ -97,6 +80,24 @@ id_expression ::= unqualified_id action => do_grammar # TODO: Full definition
 unqualified_id ::= identifier action => do_grammar  # TODO: Full definition
 
 # A.6 Declarations
+declaration_seq ::= declaration+ action => do_grammar
+
+declaration ::= namespace_definition action => do_grammar
+    | macro_def action=> do_grammar # TODO: Correct definition
+    | class_dec action => do_grammar
+    | class_template_dec action => do_grammar
+    | class_template_explicit_specialization action => do_grammar
+    | type_alias_dec action => do_grammar
+    | enum_class_dec action => do_grammar
+    | enum_dec action => do_grammar
+    | comment action => do_ignore
+    | type_specifier_seq action => do_ignore
+    | storage_class_specifier action => do_ignore
+    | operator action => do_ignore
+    | identifier action => do_ignore
+    | punctuation action => do_ignore
+    | template_dec action => do_ignore
+
 storage_class_specifier ::= <static keyword> action => do_capture
     | <thread_local keyword> action => do_capture
     | <extern keyword> action => do_capture
@@ -125,6 +126,14 @@ simple_type_specifier ::= type_name action => do_grammar # TODO: Full definition
 
 
 type_name ::= identifier action => do_grammar # TODO: Correct definition
+
+namespace_definition ::= named_namespace_definition action => do_grammar # TODO: Full definition
+
+named_namespace_definition # TODO: Full definition
+    ::= (<namespace keyword>) identifier (<l brace>) namespace_body (<r brace>) action => do_grammar
+        |  (<namespace keyword>) identifier (<l brace>) (<r brace>) action => do_grammar
+
+namespace_body ::= declaration_seq+ action => do_grammar;
 
 #A.7 Declarators
 cv_qualifier ::= <const keyword> action => do_capture | <volatile keyword> action => do_capture
@@ -242,6 +251,9 @@ non_angle ~ non_angle_char
 :lexeme ~ <mutable keyword> priority => 1
 <mutable keyword> ~ 'mutable'
 
+:lexeme ~ <namespace keyword> priority => 1
+<namespace keyword> ~ 'namespace'
+
 :lexeme ~ <new keyword> priority => 1
 <new keyword> ~ 'new'
 
@@ -286,6 +298,13 @@ non_angle ~ non_angle_char
 
 :lexeme ~ <ellipses keyword> priority => 1
 <ellipses keyword> ~ '...'
+
+:lexeme ~ <l brace> priority => 1
+<l brace> ~ '{'
+
+:lexeme ~ <r brace> priority => 1
+<r brace> ~ '}'
+
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
@@ -655,8 +674,12 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
     my $input = << 'EOF';
-[[noreturn]] void abort() noexcept;
-[[noreturn]] void abort() noexcept;
+namespace std {
+  using size_t = @\seebelow@;
+  using div_t = @\seebelow@;
+  using ldiv_t = @\seebelow@;
+  using lldiv_t = @\seebelow@;
+}
 EOF
     my $length_read = $recce->read( \$input );
     my $value_ref;
@@ -664,6 +687,7 @@ EOF
 	eval {
 	    $value_ref = $recce->value;
 	};
+	print $@;
     } while ($@);
 
     print Dumper($$value_ref);
