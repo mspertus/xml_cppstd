@@ -15,6 +15,7 @@ use strict;
 use warnings;
 use LaTeXML::Package;
 use String::Util 'trim';
+use List::Util 'sum';
 use Marpa::R2;
 use Data::Dumper;
 use Tie::IxHash;
@@ -106,7 +107,7 @@ type_specifier ::= simple_type_specifier action => do_grammar # TODO: Full defin
 
 type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
 
-simple_type_specifier ::= type_name action => pass_through # TODO: Full definition
+simple_type_specifier ::= type_name action => do_grammar # TODO: Full definition
     | <char keyword> action => do_capture
     | <char16_t keyword> action => do_capture
     | <char32_t keyword> action => do_capture
@@ -465,7 +466,6 @@ sub CodeProcess::do_class_template_specialization {
 }
 
 sub CodeProcess::do_macro {
-    print "doing a macro\n";
     return { macro => {
 	name => $_[2],
 	match => match_text
@@ -500,15 +500,69 @@ sub CodeProcess::do_enum {
 # A.6 Declarations
 sub CodeProcess::do_type_specifier_seq {
     (undef, my @args) = @_;
+
     # Follow the rules in dcl.type/2 for valid type-specifier-seqs
-    my %counts = ( const => 0, volatile => 0 );
-    map { my $match = $$_{'type-specifier'}{match};
-	  $counts{$match}++;
-    } @args;
+    my %counts = ('const' => 0, 'volatile' => 0, 'signed' => 0, 'unsigned' => 0,
+		  'char' => 0, 'long' => 0, 'short' => 0, 'int' => 0, 'double' => 0);
+    my $found_type_name = 0;
+    foreach my $type_specifier (map { $$_{'type-specifier'} } (@args)) {
+	my $is_type_name = 0;
+	if (exists($$type_specifier{'simple-type-specifier'})) {
+	    my $simple_type_specifier = $$type_specifier{'simple-type-specifier'};
+	    if(ref($simple_type_specifier) eq 'HASH' && exists($$simple_type_specifier{'type-name'})) {
+		if($found_type_name) {
+		    Marpa::R2::Context::bail("Duplicate type-name (dcl.type/2): ".match_text());
+		}
+		$found_type_name = 1;
+		$is_type_name = 1;
+	    } 
+	}
+	if(!$is_type_name) {
+	    $counts{$$type_specifier{match}}++;
+	}
+    }
     if($counts{const} > 1 || $counts{volatile} > 1) {
 	Marpa::R2::Context::bail("Duplicate const or volatile (dcl.type/2): ".match_text());
     }
+    $counts{const} = 0;
+    $counts{volatile} = 0;
+    my $total = sum(values %counts);
+    if($found_type_name + $total == 0) {
+	Marpa::R2::Context::bail("Need a non-cv type specifier (dcl.type/2): ".match_text());
+    }
+    
+    if($found_type_name && $total) {
+	Marpa::R2::Context::bail("Cannot modify type names (dcl.type/2): ".match_text());
+    }
+
+    if($counts{signed} + $counts{unsigned}) {
+	if($counts{signed} + $counts{unsigned} > 1) {
+	    Marpa::R2::Context::bail("Too many (un)signeds (dcl.type/2): ".match_text());
+	}
 	
+	if($total != sum(map { $counts{$_} } ('signed', 'unsigned', 'char', 'long', 'short', 'int'))) {
+	    Marpa::R2::Context::bail("(un)signed only modifies char/long/short/int (dcl.type/2): ".match_text());
+	}
+    }
+    $counts{signed} = 0;
+    $counts{unsigned} = 0;
+    $total = sum(values %counts);
+	    
+    if($counts{long} > 2) {
+	Marpa::R2::Context::bail("Too many longs".match_text());
+    }
+
+    if ($counts{long} == 2 && $total != $counts{long} + $counts{int}) {
+	Marpa::R2::Context::bail("long long can only modify int".match_text());
+    }
+    
+    if($counts{long} && $total != $counts{long} + $counts{int} + $counts{double}) {
+	Marpa::R2::Context::bail("long only modifies long/int/double (dcl.type/2): ".match_text());
+    }	
+    $counts{long} = 0;
+    if(sum(values %counts) > 1) {
+	Marpa::R2::Context::bail("Too many type-specifiers in type-specifier-seq (dcl.type/2): ".match_text());
+    }
     return CodeProcess::do_grammar(@_);
 }
 
@@ -550,7 +604,6 @@ DefConstructor('\@@listings@block {} {}',
 			   eval {
 			       $value_ref = $recce->value;
 			   };
-			   print $@;
 		       } while ($@);
 		       insertXML($doc, $$value_ref);
 		       $document->closeElement('ltx:note');
@@ -602,8 +655,8 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess' } );
 
     my $input = << 'EOF';
-  const x;
-  template<> class numeric_limits<bool>;
+[[noreturn]] void abort() noexcept;
+[[noreturn]] void abort() noexcept;
 EOF
     my $length_read = $recce->read( \$input );
     my $value_ref;
@@ -613,6 +666,7 @@ EOF
 	};
     } while ($@);
 
+    print Dumper($$value_ref);
     insertXML($doc, $$value_ref);
 	       });
  
