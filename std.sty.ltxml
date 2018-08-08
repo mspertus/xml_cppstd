@@ -195,8 +195,8 @@ ptr_declarator ::= noptr_declarator action => do_grammar
 noptr_declarator ::= declarator_id action => do_grammar # TODO: Full definition
     | noptr_declarator parameters_and_qualifiers action => do_grammar
 
-parameters_and_qualifiers ::= ('(') parameter_declaration_clause (')') action => do_grammar # TODO: Full definition
-    | ('(') (')') action => do_grammar
+parameters_and_qualifiers ::= ('(') parameter_declaration_clause (')') <optional noexcept_specifier> action => do_grammar # TODO: Full definition
+    | ('(') (')') <optional noexcept_specifier> action => do_grammar
 
 ptr_operator ::= '*' action => do_capture # TODO: Full definition
     | '&' action => do_capture
@@ -272,6 +272,11 @@ template_argument_list ::= template_argument action => do_list # TODO: actions
 
 template_argument ::= type_id action => do_capture # TODO: Full definition
 
+# A.13 Exception handling
+noexcept_specifier ::= <noexcept keyword> action => do_capture # TODO: Full definition
+<optional noexcept_specifier> ::= noexcept_specifier action => do_grammar
+<optional noexcept_specifier> ::= action => do_grammar
+
 identifier ::= <ident> action => do_capture
     | standard_directive action => do_grammar
 
@@ -336,6 +341,9 @@ non_at ~ [^@]+
 
 :lexeme ~ <new keyword> priority => 1
 <new keyword> ~ 'new'
+
+:lexeme ~ <noexcept keyword> priority => 1
+<noexcept keyword> ~ 'noexcept'
 
 :lexeme ~ <operator keyword> priority => 1
 <operator keyword> ~ 'operator'
@@ -484,9 +492,13 @@ sub CodeProcess::do_grammar {
     
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
+
     my %result;
     tie(%result, 'Tie::IxHash');
 
+    my $optional = ($nonterminal =~ /^<optional /);
+    print "nonterminal: $nonterminal:$optional\n";
+    
     if($is_quantitative->($rule_id)) {
 	my $arg0 = $args[0];
 	my ($key) = keys %$arg0;
@@ -496,7 +508,7 @@ sub CodeProcess::do_grammar {
 	map { my $arg = $_; map { $result{$_} = $$arg{$_} } keys %$arg; } @args;
     }
     $result{match} = match_text();
-    return { $nonterminal => \%result };
+    return $optional ? \%result : { $nonterminal => \%result };
 }
 
 sub CodeProcess::do_capture {
@@ -766,7 +778,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
-  [[noreturn]] void abort();
+  [[noreturn]] void abort() noexcept;
 EOF
     my $length_read = $recce->read( \$input );
     my $value_ref;
