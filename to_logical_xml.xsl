@@ -11,11 +11,13 @@
     </standard>
   </xsl:template>
   
-  <xsl:template match="ltx:note[@role='header']">
-    <header>
-      <xsl:attribute name="name"><xsl:value-of select="@class"/></xsl:attribute> 
-      <xsl:apply-templates select="ltx:note[@role='statements']"/>
-    </header>
+  <xsl:template match="ltx:note[@role='header' or @role='declaration-seq']">
+    <xsl:element name="{@role}">
+      <xsl:if test='@class'>
+	<xsl:attribute name="name"><xsl:value-of select="@class"/></xsl:attribute>
+      </xsl:if>
+      <xsl:apply-templates select="." mode="auto"/>
+    </xsl:element>
   </xsl:template>
 
   <xsl:template match="ltx:note[@role='statements']">
