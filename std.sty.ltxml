@@ -468,8 +468,12 @@ sub CodeProcess::pass_through {
 
 sub CodeProcess::do_ignore {
     my $unignored = CodeProcess::do_grammar(@_);
-    my ($key) = keys %$unignored;
-    return { $key => { ignore => $$unignored{$key} } }
+    my ($rank, $item) = @$unignored;
+    if(ref($item) ne 'HASH') {
+	print "***Oops: ".Dumper($unignored);
+    };
+    my ($key) = keys %$item;
+    return [ $rank, { $key => { ignore => $$item{$key} } }]
 }
 
 sub CodeProcess::do_grammar {
@@ -710,22 +714,18 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
-  void abort() noexcept;
+  [[nodiscard]] void abort() noexcept;
 EOF
 
-    print "xyz\n";
     my $length_read = $recce->read( \$input );
     my $value_ref;
-    print "aaa\n";
+    my $matches = 0;
     do {
 	eval {
 	    $value_ref = $recce->value;
 	};
-	print $@;
-    } while ($@);
+    } while ($value_ref);
 
-    print "*****";
-    print Dumper($value_ref);
     insertXML($doc, $$value_ref);
 	       });
  
