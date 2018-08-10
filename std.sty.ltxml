@@ -85,11 +85,11 @@ declaration_seq ::= declaration+ action => do_grammar
 declaration ::= simple_declaration action => do_grammar
     | namespace_definition action => do_grammar
     | linkage_specification action => do_grammar
-    | comment action => do_ignore rank => -1
-    | storage_class_specifier action => do_ignore rank => -1
-    | operator action => do_ignore rank => -1
-    | identifier action => do_ignore rank => -1
-    | punctuation action => do_ignore rank => -1
+    | comment action => do_ignore_1
+    | storage_class_specifier action => do_ignore_1
+    | operator action => do_ignore_1
+    | identifier action => do_ignore_1
+    | punctuation action => do_ignore_1
 
 
 
@@ -393,7 +393,7 @@ my $recce;
 
 my $doc;
 
-sub insertXMLInner {
+sub insertXML {
     my ($doc, $tree) = @_;
     my $ignore = 0;
     if(ref($tree) eq "") {
@@ -418,7 +418,7 @@ sub insertXMLInner {
 		    }
 		}
 		$doc->openElement('ltx:note', role => $key, @attributes);
-		insertXMLInner($doc, $value);
+		insertXML($doc, $value);
 		$doc->closeElement('ltx:note');
 	    }
 	} else {
@@ -431,16 +431,10 @@ sub insertXMLInner {
 		}
 	    }
 	    $doc->openElement('ltx:note', role => $key, @attributes);
-	    insertXMLInner($doc, $content);
+	    insertXML($doc, $content);
 	    $doc->closeElement('ltx:note');
 	}
     }
-}
-
-sub insertXML {
-    my ($doc, $node) = @_;
-    my ($rank, $tree) = @$node;
-    insertXMLInner($doc, $tree);
 }
 
 
@@ -452,8 +446,7 @@ sub match_text {
 }
    
 sub extract_rank {
-    my (undef, @ranked) = @_;
-    my $rank = 0;
+    my ($rank, undef, @ranked) = @_;
     my @deranked = map { my ($r, $i) = @$_; $rank += $r; $i } @ranked;
     return ($rank, \@deranked);
 };
@@ -466,8 +459,8 @@ sub CodeProcess::pass_through {
     return $_[1];
 }
 
-sub CodeProcess::do_ignore {
-    my $unignored = CodeProcess::do_grammar(@_);
+sub CodeProcess::do_ignore_inner {
+    my $unignored = CodeProcess::do_grammar_inner(@_);
     my ($rank, $item) = @$unignored;
     if(ref($item) ne 'HASH') {
 	print "***Oops: ".Dumper($unignored);
@@ -476,7 +469,15 @@ sub CodeProcess::do_ignore {
     return [ $rank, { $key => { ignore => $$item{$key} } }]
 }
 
-sub CodeProcess::do_grammar {
+sub CodeProcess::do_ignore {
+    return CodeProcess::do_ignore_inner(0, @_);
+}
+
+sub CodeProcess::do_ignore_1 {
+    return CodeProcess::do_ignore_inner(-1, @_);
+}
+
+sub CodeProcess::do_grammar_inner {
     my ($rank, $deranked) = extract_rank (@_);
     my @args = @$deranked;
     
@@ -512,6 +513,10 @@ sub CodeProcess::do_grammar {
     return [$rank, $optional ? \%result : { $nonterminal => \%result }];
 }
 
+sub CodeProcess::do_grammar {
+    return CodeProcess::do_grammar_inner(0, @_);
+}
+
 sub CodeProcess::do_capture {
     my (undef, @args) = @_;
     my $rule_id     = $Marpa::R2::Context::rule;
@@ -522,7 +527,7 @@ sub CodeProcess::do_capture {
 }
 
 sub CodeProcess::do_list {
-    my ($rank, $deranked) = extract_rank (@_);
+    my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
 
     my $rule_id     = $Marpa::R2::Context::rule;
@@ -540,7 +545,7 @@ sub CodeProcess::do_list {
 
 # A.6 Declarations
 sub CodeProcess::do_type_specifier_seq {
-    my ($rank, $deranked) = extract_rank (@_);
+    my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
 
     # Follow the rules in dcl.type/2 for valid type-specifier-seqs
@@ -609,7 +614,7 @@ sub CodeProcess::do_type_specifier_seq {
 }
 
 sub CodeProcess::do_balanced_token {
-    my ($rank, $deranked) = extract_rank (@_);
+    my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
 
     my $balanced_token_seq = $args[1];
@@ -632,7 +637,7 @@ sub CodeProcess::do_operator {
 
 # A.12 Templates
 sub CodeProcess::do_simple_template_id {
-    my ($rank, $deranked) = extract_rank (@_);
+    my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
     my %result;
     tie(%result, 'Tie::IxHash', 'template-name' => $args[0],  'template-argument-list' => [], 'match' => match_text());
@@ -720,13 +725,24 @@ EOF
     my $length_read = $recce->read( \$input );
     my $value_ref;
     my $matches = 0;
+    my $rank = -1000000;
+    my $parse_tree;
     do {
 	eval {
 	    $value_ref = $recce->value;
+	    if($value_ref) {
+		my $value = $$value_ref;
+		my ($my_rank, $my_parse_tree) = @$value;
+		if($my_rank > $rank) {
+		    $rank = $my_rank;
+		    $parse_tree = $my_parse_tree;
+		}
+	    }
 	};
+	print $@;
     } while ($value_ref);
 
-    insertXML($doc, $$value_ref);
+    insertXML($doc, $parse_tree);
 	       });
  
 1;
