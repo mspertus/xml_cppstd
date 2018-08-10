@@ -93,7 +93,7 @@ declaration ::= simple_declaration action => do_grammar
 
 
 
-simple_declaration ::= decl_specifier_seq (';') action => do_grammar
+simple_declaration ::= decl_specifier_seq (';') action => do_decl_specifier_seq
     | decl_specifier_seq init_declarator_list (';') action => do_grammar
     | attribute_specifier_seq decl_specifier_seq (';') action => do_grammar
     | attribute_specifier_seq decl_specifier_seq init_declarator_list (';') action => do_grammar
@@ -499,7 +499,6 @@ sub CodeProcess::do_grammar_inner {
     tie(%result, 'Tie::IxHash');
 
     my $optional = ($nonterminal =~ /^<optional /);
-    print "nonterminal: $nonterminal:$optional\n";
     
     if($is_quantitative->($rule_id)) {
 	my $arg0 = $args[0];
@@ -543,7 +542,47 @@ sub CodeProcess::do_list {
     return [$rank, { $nonterminal => \@result }];
 }
 
+sub bail {
+    Marpa::R2::Context::bail($_[0].": ".match_text());
+}
+
 # A.6 Declarations
+sub CodeProcess::do_decl_specifier_seq {
+    my ($rank, $deranked) = extract_rank (0, @_);
+    my @args = @$deranked;
+    my @decl_specifiers = @{$args[0]->{'decl-specifier-seq'}->{'decl-specifier'}};
+
+    # Follow the rules in dcl.spec for valid decl-specifier-seqs
+    # dcl.spec/2 Each decl-specifier can only appear once, except long, which can appear twice
+    my %counts = ( long => 0);
+    my $non_cv_defining_type_specifier_seen = 0;
+    
+    foreach (@decl_specifiers) {
+	$counts{$$_{match}}++;
+
+	# TODO: Is this test accurate? I find dcl.spec/3 confusing.
+	if(exists($$_{'defining-type-specifier'}) 
+	   && (!exists($$_{'defining-type-specified'}->{'type-specifier'})
+	       ||  !exists($$_{'defining-type-specified'}->{'type-specifier'}->{'cv-qualifier'}))) {
+	    if($non_cv_defining_type_specifier_seen) {
+		bail("duplicate type names (dcl.spec/3)");
+	    }
+	    $non_cv_defining_type_specifier_seen = 1;
+	}
+    }
+    
+    if($counts{long} > 2) {
+	bail("Too many longs in decl-specifier-seq (dcl.spec/2)")
+    }
+    $counts{long} = 0;
+    if (max(values %counts) > 1) {
+	bail("Duplicate decl-specifiers in decl-specifier-seq (dcl.spec/2)")
+    }
+
+    print Dumper(@args);
+    return CodeProcess::do_grammar(@_);
+}
+
 sub CodeProcess::do_type_specifier_seq {
     my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
@@ -719,7 +758,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
-  [[nodiscard]] void abort() noexcept;
+    int x;
 EOF
 
     my $length_read = $recce->read( \$input );
@@ -740,7 +779,7 @@ EOF
 	    }
 	};
 	print $@;
-    } while ($value_ref);
+    } while ($@ || $value_ref);
 
     insertXML($doc, $parse_tree);
 	       });
