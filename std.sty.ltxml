@@ -61,18 +61,10 @@ lexeme default = latm => 1
 
 :start ::= declaration_seq
 
-macro_def ::= '#define' <ident> (RestOfLine) action => do_macro
-type_alias_dec ::= <using keyword> identifier '=' (RestOfLine) action => do_type_alias
-class_dec ::= <class keyword> <ident>  (RestOfLine) action => do_class
-class_template_dec ::= template_head <class keyword> <ident> non_angle  action => do_class_template
+macro_def ::= ('#define') identifier (RestOfLine) action => do_grammar;
+comment ::= '//' (RestOfLine) action => do_capture
+
 class_template_explicit_specialization ::= (<template keyword>) ('<') ('>') class_key simple_template_id (RestOfLine) action => do_grammar
-enum_dec ::= <enum keyword> <ident> (RestOfLine) action => do_enum
-enum_class_dec ::= <enum keyword> <class keyword> <ident> ':' (RestOfLine) action => do_enum_class
-comment ::= '//' (RestOfLine) action => do_capture_all
-template_dec ::= template_head <ident> (RestOfLine) action => do_capture_all
-    | <template keyword> '<' '>' <ident> (RestOfLine) action => do_capture_all
-    | template_head punctuation (RestOfLine) action => do_capture_all
-    | <template keyword> '<' '>' punctuation (RestOfLine) action => do_capture_all
 
 # A.2 Lexical Conventions
 token ::= identifier action => do_grammar # TODO: Full definition and propagate changes to balanced_token
@@ -93,19 +85,12 @@ declaration_seq ::= declaration+ action => do_grammar
 declaration ::= simple_declaration action => do_grammar
     | namespace_definition action => do_grammar
     | linkage_specification action => do_grammar
-    | macro_def action=> do_grammar # TODO: Correct definition
-    | class_dec action => do_grammar
-    | class_template_dec action => do_grammar
-    | class_template_explicit_specialization action => do_grammar
-    | type_alias_dec action => do_grammar
-    | enum_class_dec action => do_grammar
-    | enum_dec action => do_grammar
     | comment action => do_ignore rank => -1
     | storage_class_specifier action => do_ignore rank => -1
     | operator action => do_ignore rank => -1
     | identifier action => do_ignore rank => -1
     | punctuation action => do_ignore rank => -1
-    | template_dec action => do_ignore rank => -1
+
 
 
 simple_declaration ::= decl_specifier_seq (';') action => do_grammar
@@ -259,16 +244,12 @@ type_parameter ::= type_parameter_key action => do_grammar
 
 type_parameter_key ::= <class keyword> action => do_capture | <typename keyword> action => do_capture
 
-simple_template_id ::=
-    template_name ('<') ('>') action => do_simple_template_id 
-    | template_name ('<') template_argument_list ('>') action => do_grammar
+simple_template_id ::= template_name ('<') template_argument_list ('>') action => do_grammar
 
 template_name ::= <ident> action => do_capture
 
-template_argument_list ::= template_argument action => do_list # TODO: actions
-    | template_argument <ellipses keyword>
-    | template_argument_list (',') template_argument action => do_list
-    | template_argument_list (',') template_argument <ellipses keyword>
+template_argument_list ::= template_argument* action => do_grammar # TODO: actions
+
 
 template_argument ::= type_id action => do_capture # TODO: Full definition
 
@@ -286,8 +267,6 @@ ellipses ::= (<ellipses keyword>) action => do_capture
 
 <ident> ~ [\w]+
 <punctuation token> ~ [^\s\w]
-non_angle_char ~ [^<>]
-non_angle ~ non_angle_char
 non_at ~ [^@]+
 
 # Keywords
@@ -318,6 +297,7 @@ non_at ~ [^@]+
 :lexeme ~ <double keyword> priority => 1
 <double keyword> ~ 'double'
 
+enum ::= <enum keyword> action => do_capture
 :lexeme ~ <enum keyword> priority => 1
 <enum keyword> ~ 'enum'
 
@@ -375,6 +355,7 @@ non_at ~ [^@]+
 :lexeme ~ <unsigned keyword> priority => 1
 <unsigned keyword> ~ 'unsigned'
 
+using ::= <using keyword> action => do_capture
 :lexeme ~ <using keyword> priority => 1
 <using keyword> ~ 'using'
 
@@ -412,7 +393,7 @@ my $recce;
 
 my $doc;
 
-sub insertXML {
+sub insertXMLInner {
     my ($doc, $tree) = @_;
     my $ignore = 0;
     if(ref($tree) eq "") {
@@ -437,7 +418,7 @@ sub insertXML {
 		    }
 		}
 		$doc->openElement('ltx:note', role => $key, @attributes);
-		insertXML($doc, $value, $ignore);
+		insertXMLInner($doc, $value);
 		$doc->closeElement('ltx:note');
 	    }
 	} else {
@@ -450,11 +431,18 @@ sub insertXML {
 		}
 	    }
 	    $doc->openElement('ltx:note', role => $key, @attributes);
-	    insertXML($doc, $content);
+	    insertXMLInner($doc, $content);
 	    $doc->closeElement('ltx:note');
 	}
     }
 }
+
+sub insertXML {
+    my ($doc, $node) = @_;
+    my ($rank, $tree) = @$node;
+    insertXMLInner($doc, $tree);
+}
+
 
 sub match_text {
     my @g1 = Marpa::R2::Context::location();
@@ -462,7 +450,14 @@ sub match_text {
     my @span2 = $recce->g1_location_to_span($g1[1]);
     return trim($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
 }
-    
+   
+sub extract_rank {
+    my (undef, @ranked) = @_;
+    my $rank = 0;
+    my @deranked = map { my ($r, $i) = @$_; $rank += $r; $i } @ranked;
+    return ($rank, \@deranked);
+};
+ 
 sub CodeProcess::do_dump {
     print "matched: ".match_text()."\n";
 }
@@ -478,7 +473,9 @@ sub CodeProcess::do_ignore {
 }
 
 sub CodeProcess::do_grammar {
-    my (undef, @args) = @_;
+    my ($rank, $deranked) = extract_rank (@_);
+    my @args = @$deranked;
+    
     my $rule_id     = $Marpa::R2::Context::rule;
     my $slg         = $Marpa::R2::Context::slg;
 
@@ -508,7 +505,7 @@ sub CodeProcess::do_grammar {
 	map { my $arg = $_; map { $result{$_} = $$arg{$_} } keys %$arg; } @args;
     }
     $result{match} = match_text();
-    return $optional ? \%result : { $nonterminal => \%result };
+    return [$rank, $optional ? \%result : { $nonterminal => \%result }];
 }
 
 sub CodeProcess::do_capture {
@@ -517,99 +514,30 @@ sub CodeProcess::do_capture {
     my $slg         = $Marpa::R2::Context::slg;
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
-    return { $nonterminal => $_[1] };
-}
-
-sub CodeProcess::do_capture_all {
-    my (undef, @args) = @_;
-    my $rule_id     = $Marpa::R2::Context::rule;
-    my $slg         = $Marpa::R2::Context::slg;
-    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
-    $nonterminal=~s/_/-/g;
-    return { $nonterminal => \@args };
+    return [0, { $nonterminal => $_[1] }];
 }
 
 sub CodeProcess::do_list {
-    my (undef, @args) = @_;
+    my ($rank, $deranked) = extract_rank (@_);
+    my @args = @$deranked;
+
     my $rule_id     = $Marpa::R2::Context::rule;
     my $slg         = $Marpa::R2::Context::slg;
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
     if(scalar(@args) == 1) {
-	return { $nonterminal => [$_[1]] };
+	return [$rank, { $nonterminal => [$_[1]] }];
     }
     my(undef, $args_so_far, $new_arg) = @_;
     my @result = @$$args_so_far{$nonterminal};
     push(@result, @$new_arg);
-    return { $nonterminal => \@result };
-}
-
-sub CodeProcess::do_class {
-    return { 'class-template' => {
-	name => $_[2],
-	match => match_text
-	     }
-    }
-}
-
-sub CodeProcess::do_class_template {
-    return { 'class-template' => {
-	name => $_[3],
-	match => match_text
-	     }
-    }
-}
-
-sub CodeProcess::do_class_template_specialization {
-    print "Class_template_specialization\n";
-    my $simple_template_id = $_[3];
-    my %result;
-    tie(%result, 'Tie::IxHash');
-
-    return { 'class-template-specialization' => {
-	name => $$simple_template_id{'simple-template-id'}{match},
-	map { $_ =>  $$simple_template_id{$_}} keys %$simple_template_id,
-	match => match_text()
-	     }
-    }
-}
-
-sub CodeProcess::do_macro {
-    return { macro => {
-	name => $_[2],
-	match => match_text
-	     }
-    }
-}
-
-sub CodeProcess::do_type_alias {
-    print "in type alias\n";
-    return { 'type-alias' => {
-	name => $_[2],
-	match => match_text
-	     }
-    }
-}
-
-sub CodeProcess::do_enum_class {
-    return { 'enum-class' => {
-	name => $_[3],
-	match => match_text
-	     }
-    }
-}
-
-sub CodeProcess::do_enum {
-    return { 'enum' => {
-	name => $_[3],
-	match => match_text
-	     }
-    }
+    return [$rank, { $nonterminal => \@result }];
 }
 
 # A.6 Declarations
 sub CodeProcess::do_type_specifier_seq {
-    (undef, my @args) = @_;
+    my ($rank, $deranked) = extract_rank (@_);
+    my @args = @$deranked;
 
     # Follow the rules in dcl.type/2 for valid type-specifier-seqs
     my %counts = ('const' => 0, 'volatile' => 0, 'signed' => 0, 'unsigned' => 0,
@@ -677,7 +605,9 @@ sub CodeProcess::do_type_specifier_seq {
 }
 
 sub CodeProcess::do_balanced_token {
-    my (undef, @args) = @_;
+    my ($rank, $deranked) = extract_rank (@_);
+    my @args = @$deranked;
+
     my $balanced_token_seq = $args[1];
     my %result;
     tie(%result, 'Tie::IxHash', 
@@ -685,7 +615,7 @@ sub CodeProcess::do_balanced_token {
 	'balanced-token-seq' => $$balanced_token_seq{'balanced-token-seq'},
 	punctuator => $args[0],
 	'match' => match_text());
-    return { balanced_token => \%result };
+    return [0, { balanced_token => \%result }];
 }
 
 # A.11 Overloading
@@ -693,13 +623,15 @@ sub CodeProcess::do_operator {
     my (undef, @args) = @_;
     my $args0 = $args[0];
     my (undef, @tokens) = @$args0;
-    return { operator => join('', @tokens) }
+    return [0, { operator => join('', @tokens) }]
 }
 
 # A.12 Templates
 sub CodeProcess::do_simple_template_id {
+    my ($rank, $deranked) = extract_rank (@_);
+    my @args = @$deranked;
     my %result;
-    tie(%result, 'Tie::IxHash', 'template-name' => $_[1],  'template-argument-list' => [], 'match' => match_text());
+    tie(%result, 'Tie::IxHash', 'template-name' => $args[0],  'template-argument-list' => [], 'match' => match_text());
     return { "simple-template-id" => \%result};
 }
 
@@ -778,10 +710,13 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
-  [[noreturn]] void abort() noexcept;
+  void abort() noexcept;
 EOF
+
+    print "xyz\n";
     my $length_read = $recce->read( \$input );
     my $value_ref;
+    print "aaa\n";
     do {
 	eval {
 	    $value_ref = $recce->value;
@@ -789,6 +724,8 @@ EOF
 	print $@;
     } while ($@);
 
+    print "*****";
+    print Dumper($value_ref);
     insertXML($doc, $$value_ref);
 	       });
  
