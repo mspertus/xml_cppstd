@@ -61,7 +61,6 @@ lexeme default = latm => 1
 
 :start ::= declaration_seq
 
-macro_def ::= ('#define') identifier (RestOfLine) action => do_grammar;
 comment ::= '//' (RestOfLine) action => do_capture
 
 class_template_explicit_specialization ::= (<template keyword>) ('<') ('>') class_key simple_template_id (RestOfLine) action => do_grammar
@@ -86,6 +85,7 @@ declaration ::= block_declaration action => do_grammar
     | namespace_definition action => do_grammar
     | linkage_specification action => do_grammar
     | class_template_explicit_specialization action => do_grammar
+    | control_line action => do_grammar # Since we don't expand macros
     | comment action => do_ignore_1
     | storage_class_specifier action => do_ignore_1
     | operator action => do_ignore_1
@@ -270,12 +270,25 @@ noexcept_specifier ::= <noexcept keyword> action => do_capture # TODO: Full defi
 <optional noexcept_specifier> ::= noexcept_specifier action => do_grammar
 <optional noexcept_specifier> ::= action => do_grammar
 
+# A.14 Preprocessing directives
+control_line ::=  # TODO: Full definition
+    ('#define') identifier replacement_list (new_line) action => do_grammar
+
+replacement_list ::= # TODO: Full definition (but seems unlikely this is worthwhile)
+    RestOfLine action => do_capture
+
+new_line ::= 
+      <newline char> action => do_capture
+
 identifier ::= <ident> action => do_capture
     | standard_directive action => do_grammar
 
 standard_directive ::= ('@') non_at ('@') action => do_capture
 punctuation ::= <punctuation token> action => do_capture
 ellipses ::= (<ellipses keyword>) action => do_capture
+
+:lexeme ~ <newline char> priority => 1
+<newline char> ~ [\n]
 
 <ident> ~ [\w]+
 <punctuation token> ~ [^\s\w]
@@ -387,9 +400,9 @@ enum ::= <enum keyword> action => do_capture
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
-  ::=           action => ::undef  # rest is optional
+  ::=     action => pass_through  # rest is optional
 RestOfLine
-  ::= THE_REST  action => ::undef  # matches anything
+  ::= THE_REST action => pass_through  # matches anything
 
 :lexeme ~ THE_REST priority => 1
 THE_REST ~ [^\n]+
@@ -780,7 +793,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
-  using size_t = @\seebelow@;
+#define NULL @\seebelow@
 EOF
 
     my $length_read = $recce->read( \$input );
