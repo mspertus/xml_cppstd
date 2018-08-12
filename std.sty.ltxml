@@ -55,6 +55,31 @@ DefConstructor('\header{}',
 	       }
 );
 
+sub bail {
+    Marpa::R2::Context::bail($_[0].": ".match_text());
+}
+
+my $recce;
+
+sub match_text {
+    my @g1 = Marpa::R2::Context::location();
+    my @span1 = $recce->g1_location_to_span($g1[0]);
+    my @span2 = $recce->g1_location_to_span($g1[1]);
+    return trim($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
+}
+
+my $coarse_dsl = << 'END_OF_DSL';
+balanced_braces ::= 
+      '{' balanced_braces '}' action => do_coarse_balanced_braces
+    | '{' non_braces balanced_braces '}' action => do_coarse_balanced_braces
+    | '{' balanced_braces non_braces '}' action => do_coarse_balanced_braces
+    | '{' balanced_braces non_braces balanced_braces '}' action => do_coarse_balanced_braces
+
+
+non_braces ~ [^{}]+
+
+END_OF_DSL
+    
 my $dsl = <<'END_OF_DSL';
 :default ::= action => [name,values]
 lexeme default = latm => 1
@@ -150,7 +175,10 @@ named_namespace_definition # TODO: Full definition
     ::= (<namespace keyword>) identifier ('{') namespace_body ('}') action => do_grammar
         |  (<namespace keyword>) identifier ('{') ('}') action => do_grammar
 
+<deferred namespace_body> ::=
+
 namespace_body ::= declaration_seq action => do_grammar
+
 
 linkage_specification ::= (<extern keyword>) string_literal ('{') ('}') action => do_grammar
     | (<extern keyword>) string_literal ('{') declaration_seq ('}') action => do_grammar
@@ -416,6 +444,17 @@ enum ::= <enum keyword> action => do_capture
 :lexeme ~ <ellipses keyword> priority => 1
 <ellipses keyword> ~ '...'
 
+brace_balanced ::= 
+      non_braces action => do_capture
+    | '{' brace_balanced '}' action => do_capture
+    | brace_balanced '{' brace_balanced '}' action => do_capture
+    | '{' brace_balanced '}' brace_balanced action => do_capture
+    | brace_balanced '{' brace_balanced '}' brace_balanced action => do_capture
+
+
+
+non_braces ~ [^{}]+
+
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
   ::=     action => pass_through  # rest is optional
@@ -430,9 +469,6 @@ whitespace ~ [\s]+
 
 END_OF_DSL
 
-
-my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
-my $recce;
 
 my $doc;
 
@@ -480,19 +516,8 @@ sub insertXML {
     }
 }
 
+my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
 
-sub bail {
-    Marpa::R2::Context::bail($_[0].": ".match_text());
-}
-
-
-sub match_text {
-    my @g1 = Marpa::R2::Context::location();
-    my @span1 = $recce->g1_location_to_span($g1[0]);
-    my @span2 = $recce->g1_location_to_span($g1[1]);
-    return trim($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
-}
-   
 sub extract_rank {
     my ($rank, undef, @ranked) = @_;
     my @deranked = map { my ($r, $i) = @$_; $rank += $r; $i } @ranked;
@@ -570,7 +595,7 @@ sub CodeProcess::do_capture {
     my $slg         = $Marpa::R2::Context::slg;
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
-    return [0, { $nonterminal => $_[1] }];
+    return [0, { $nonterminal => match_text() }];
 }
 
 sub CodeProcess::do_list {
