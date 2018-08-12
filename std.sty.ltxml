@@ -82,16 +82,22 @@ unqualified_id ::= identifier action => do_grammar  # TODO: Full definition
 # A.6 Declarations
 declaration_seq ::= declaration+ action => do_grammar
 
-declaration ::= simple_declaration action => do_grammar
+declaration ::= block_declaration action => do_grammar
     | namespace_definition action => do_grammar
     | linkage_specification action => do_grammar
+    | class_template_explicit_specialization action => do_grammar
     | comment action => do_ignore_1
     | storage_class_specifier action => do_ignore_1
     | operator action => do_ignore_1
     | identifier action => do_ignore_1
     | punctuation action => do_ignore_1
 
+block_declaration ::=
+      simple_declaration action => do_grammar
+    | alias_declaration action => do_grammar
 
+alias_declaration ::=
+    (<using keyword>) identifier ('=') defining_type_id (';') action => do_grammar
 
 simple_declaration ::= decl_specifier_seq (';') action => do_decl_specifier_seq
     | decl_specifier_seq init_declarator_list (';') action => do_grammar
@@ -114,6 +120,9 @@ type_specifier ::= simple_type_specifier action => do_grammar # TODO: Full defin
 type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
 
 defining_type_specifier ::= type_specifier action => do_grammar # TODO: Full definition
+
+defining_type_specifier_seq ::=      # TODO: Full definition
+    defining_type_specifier+ action => do_defining_type_specifier_seq
 
 simple_type_specifier ::= type_name action => do_grammar # TODO: Full definition
     | <char keyword> action => do_capture
@@ -140,7 +149,7 @@ named_namespace_definition # TODO: Full definition
     ::= (<namespace keyword>) identifier ('{') namespace_body ('}') action => do_grammar
         |  (<namespace keyword>) identifier ('{') ('}') action => do_grammar
 
-namespace_body ::= declaration_seq action => do_grammar;
+namespace_body ::= declaration_seq action => do_grammar
 
 linkage_specification ::= (<extern keyword>) string_literal ('{') ('}') action => do_grammar
     | (<extern keyword>) string_literal ('{') declaration_seq ('}') action => do_grammar
@@ -180,7 +189,8 @@ ptr_declarator ::= noptr_declarator action => do_grammar
 noptr_declarator ::= declarator_id action => do_grammar # TODO: Full definition
     | noptr_declarator parameters_and_qualifiers action => do_grammar
 
-parameters_and_qualifiers ::= ('(') parameter_declaration_clause (')') <optional noexcept_specifier> action => do_grammar # TODO: Full definition
+parameters_and_qualifiers ::=  # TODO: Full definition
+    ('(') parameter_declaration_clause (')') <optional noexcept_specifier> action => do_grammar
     | ('(') (')') <optional noexcept_specifier> action => do_grammar
 
 ptr_operator ::= '*' action => do_capture # TODO: Full definition
@@ -189,12 +199,15 @@ ptr_operator ::= '*' action => do_capture # TODO: Full definition
 
 cv_qualifier ::= <const keyword> action => do_capture | <volatile keyword> action => do_capture
 
-cv_qualifier_seq ::= cv_qualifier+ action => do_grammar;
+cv_qualifier_seq ::= cv_qualifier+ action => do_grammar
 
 declarator_id ::= id_expression action => do_grammar 
     | ellipses id_expression action => do_grammar
 
 type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
+
+defining_type_id ::=                      # TODO: Full definition
+    defining_type_specifier_seq action => do_grammar
 
 parameter_declaration_clause ::= parameter_declaration_list action => do_grammar # TODO: Full definition
 
@@ -249,7 +262,6 @@ simple_template_id ::= template_name ('<') template_argument_list ('>') action =
 template_name ::= <ident> action => do_capture
 
 template_argument_list ::= template_argument* action => do_grammar # TODO: actions
-
 
 template_argument ::= type_id action => do_capture # TODO: Full definition
 
@@ -346,6 +358,7 @@ enum ::= <enum keyword> action => do_capture
 :lexeme ~ <thread_local keyword> priority => 1
 <thread_local keyword> ~ 'thread_local'
 
+
 :lexeme ~ <typename keyword> priority => 1
 <typename keyword> ~ 'typename'
 
@@ -355,7 +368,6 @@ enum ::= <enum keyword> action => do_capture
 :lexeme ~ <unsigned keyword> priority => 1
 <unsigned keyword> ~ 'unsigned'
 
-using ::= <using keyword> action => do_capture
 :lexeme ~ <using keyword> priority => 1
 <using keyword> ~ 'using'
 
@@ -435,6 +447,11 @@ sub insertXML {
 	    $doc->closeElement('ltx:note');
 	}
     }
+}
+
+
+sub bail {
+    Marpa::R2::Context::bail($_[0].": ".match_text());
 }
 
 
@@ -542,10 +559,6 @@ sub CodeProcess::do_list {
     return [$rank, { $nonterminal => \@result }];
 }
 
-sub bail {
-    Marpa::R2::Context::bail($_[0].": ".match_text());
-}
-
 # A.6 Declarations
 sub CodeProcess::do_decl_specifier_seq {
     my ($rank, $deranked) = extract_rank (0, @_);
@@ -562,8 +575,7 @@ sub CodeProcess::do_decl_specifier_seq {
 
 	# TODO: Is this test accurate? I find dcl.spec/3 confusing.
 	if(exists($$_{'defining-type-specifier'}) 
-	   && (!exists($$_{'defining-type-specified'}->{'type-specifier'})
-	       ||  !exists($$_{'defining-type-specified'}->{'type-specifier'}->{'cv-qualifier'}))) {
+	   && !exists($$_{'defining-type-specifier'}->{'type-specifier'}->{'cv-qualifier'})) {
 	    if($non_cv_defining_type_specifier_seen) {
 		bail("duplicate type names (dcl.spec/3)");
 	    }
@@ -583,72 +595,82 @@ sub CodeProcess::do_decl_specifier_seq {
     return CodeProcess::do_grammar(@_);
 }
 
+sub validate_type_specifier_seq {
+    my @args = @_;
+    # Follow the rules in dcl.type/2 for valid type-specifier-seqs
+    my %counts = ('const' => 0, 'volatile' => 0, 'signed' => 0, 'unsigned' => 0,
+		  'char' => 0, 'long' => 0, 'short' => 0, 'int' => 0, 'double' => 0);
+
+    my @specifiers = map {values %{$_}} @args;
+    
+    foreach my $specifier (@specifiers) {
+	$counts{$$specifier{match}}++;
+    }
+    
+    if($counts{const} > 1 || $counts{volatile} > 1) {
+	bail("Duplicate const or volatile (dcl.type/2): ");
+    }
+    $counts{const} = 0;
+    $counts{volatile} = 0;
+    
+    my $total = sum(values %counts);
+    my $found_type = 0;
+
+    if($counts{signed} + $counts{unsigned}) {
+	$found_type = 1;
+	if($counts{signed} + $counts{unsigned} > 1) {
+	    bail("Too many (un)signeds (dcl.type/2): ");
+	}
+	
+	if($total != sum(map { $counts{$_} } ('signed', 'unsigned', 'char', 'long', 'short', 'int'))) {
+	    bail("(un)signed only modifies char/long/short/int (dcl.type/2)");
+	}
+
+	$counts{signed} = 0;
+	$counts{unsigned} = 0;
+	$total = sum(values %counts);
+    }
+
+    if($counts{long}) {
+	$found_type = 1;
+	if($counts{long} == 1) {
+	    if($total != $counts{long} + $counts{int} + $counts{double} + $counts{signed} + $counts{unsigned}) {
+		Marpa::R2::Context::bail("long only modifies long/int/double (dcl.type/2)".match_text());
+	    }
+	} elsif($counts{long} == 2) {
+	    if ($counts{long} == 2 && $total != $counts{long} + $counts{int}) {
+		bail("long long can only modify int");
+	    }
+	} elsif($counts{long} > 2) {
+	    bail("Too many longs");
+	}
+
+	$counts{long} = 0;
+	$total = sum(values %counts);
+    }
+        
+    if($total > 1) {
+	bail("Too many specifiers in sequence (dcl.type/2)");
+    }
+    
+    if(!$found_type && !$total) {
+	bail("No non-modifying specifiers in sequence (dcl.type/3)");
+    }	
+}
+
+sub CodeProcess::do_defining_type_specifier_seq {
+    my ($rank, $deranked) = extract_rank (0, @_);
+    my @args = @$deranked;
+
+    validate_type_specifier_seq(@args);
+    return CodeProcess::do_grammar(@_);
+}
+
 sub CodeProcess::do_type_specifier_seq {
     my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
 
-    # Follow the rules in dcl.type/2 for valid type-specifier-seqs
-    my %counts = ('const' => 0, 'volatile' => 0, 'signed' => 0, 'unsigned' => 0,
-		  'char' => 0, 'long' => 0, 'short' => 0, 'int' => 0, 'double' => 0);
-    my $found_type_name = 0;
-    foreach my $type_specifier (map { $$_{'type-specifier'} } (@args)) {
-	my $is_type_name = 0;
-	if (exists($$type_specifier{'simple-type-specifier'})) {
-	    my $simple_type_specifier = $$type_specifier{'simple-type-specifier'};
-	    if(ref($simple_type_specifier) eq 'HASH' && exists($$simple_type_specifier{'type-name'})) {
-		if($found_type_name) {
-		    Marpa::R2::Context::bail("Duplicate type-name (dcl.type/2): ".match_text());
-		}
-		$found_type_name = 1;
-		$is_type_name = 1;
-	    } 
-	}
-	if(!$is_type_name) {
-	    $counts{$$type_specifier{match}}++;
-	}
-    }
-    if($counts{const} > 1 || $counts{volatile} > 1) {
-	Marpa::R2::Context::bail("Duplicate const or volatile (dcl.type/2): ".match_text());
-    }
-    $counts{const} = 0;
-    $counts{volatile} = 0;
-    my $total = sum(values %counts);
-    if($found_type_name + $total == 0) {
-	Marpa::R2::Context::bail("Need a non-cv type specifier (dcl.type/2): ".match_text());
-    }
-    
-    if($found_type_name && $total) {
-	Marpa::R2::Context::bail("Cannot modify type names (dcl.type/2): ".match_text());
-    }
-
-    if($counts{signed} + $counts{unsigned}) {
-	if($counts{signed} + $counts{unsigned} > 1) {
-	    Marpa::R2::Context::bail("Too many (un)signeds (dcl.type/2): ".match_text());
-	}
-	
-	if($total != sum(map { $counts{$_} } ('signed', 'unsigned', 'char', 'long', 'short', 'int'))) {
-	    Marpa::R2::Context::bail("(un)signed only modifies char/long/short/int (dcl.type/2): ".match_text());
-	}
-    }
-    $counts{signed} = 0;
-    $counts{unsigned} = 0;
-    $total = sum(values %counts);
-	    
-    if($counts{long} > 2) {
-	Marpa::R2::Context::bail("Too many longs".match_text());
-    }
-
-    if ($counts{long} == 2 && $total != $counts{long} + $counts{int}) {
-	Marpa::R2::Context::bail("long long can only modify int".match_text());
-    }
-    
-    if($counts{long} && $total != $counts{long} + $counts{int} + $counts{double}) {
-	Marpa::R2::Context::bail("long only modifies long/int/double (dcl.type/2): ".match_text());
-    }	
-    $counts{long} = 0;
-    if(sum(values %counts) > 1) {
-	Marpa::R2::Context::bail("Too many type-specifiers in type-specifier-seq (dcl.type/2): ".match_text());
-    }
+    validate_type_specifier_seq(@args);
     return CodeProcess::do_grammar(@_);
 }
 
@@ -758,7 +780,7 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
-    int x;
+  using size_t = @\seebelow@;
 EOF
 
     my $length_read = $recce->read( \$input );
