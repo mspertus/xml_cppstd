@@ -68,23 +68,12 @@ sub match_text {
     return trim($recce->literal($span1[0] + $span1[1], $span2[0] + $span2[1] - $span1[0] - $span1[1]));
 }
 
-my $coarse_dsl = << 'END_OF_DSL';
-balanced_braces ::= 
-      '{' balanced_braces '}' action => do_coarse_balanced_braces
-    | '{' non_braces balanced_braces '}' action => do_coarse_balanced_braces
-    | '{' balanced_braces non_braces '}' action => do_coarse_balanced_braces
-    | '{' balanced_braces non_braces balanced_braces '}' action => do_coarse_balanced_braces
-
-
-non_braces ~ [^{}]+
-
-END_OF_DSL
+my $lazy_start = ":start ::= declaration_seq\n";
+my $eager_start = ":start ::= declaration\n";
     
 my $dsl = <<'END_OF_DSL';
 :default ::= action => [name,values]
 lexeme default = latm => 1
-
-:start ::= declaration_seq
 
 comment ::= '//' (RestOfLine) action => do_capture
 
@@ -104,7 +93,26 @@ id_expression ::= unqualified_id action => do_grammar # TODO: Full definition
 unqualified_id ::= identifier action => do_grammar  # TODO: Full definition
 
 # A.6 Declarations
-declaration_seq ::= declaration+ action => do_grammar
+eager_declaration_seq ::= declaration+ action => do_grammar
+declaration_seq ::= 
+      deferred_namespace                               rank => 2 action => do_deferred
+    | comment                                          rank => 1 action => do_deferred 
+    | deferred_preprocessor                            rank => 1 action => do_deferred
+    | deferred_semi_delimited                                    action => do_deferred
+    | declaration_seq deferred_namespace      rank => 2 action => do_deferred_seq
+    | declaration_seq comment                 rank => 1 action => do_deferred_seq
+    | declaration_seq deferred_preprocessor   rank => 1 action => do_deferred_seq
+    | declaration_seq deferred_semi_delimited           action => do_deferred_seq
+
+deferred_namespace ::=
+    <namespace keyword> identifier '{' brace_balanced '}' action => do_capture
+
+deferred_preprocessor ::=
+    '#' RestOfLine action => do_capture
+
+deferred_semi_delimited ::= non_semis ';' action => do_capture
+non_semis ::= non_semi+
+non_semi ::= punctuation | <ident>
 
 declaration ::= block_declaration action => do_grammar
     | namespace_definition action => do_grammar
@@ -136,6 +144,7 @@ decl_specifier ::= storage_class_specifier action => do_grammar # TODO: Full def
 decl_specifier_seq ::= decl_specifier+ action => do_grammar # TODO: Full definition
 
 storage_class_specifier ::= <static keyword> action => do_capture
+
     | <thread_local keyword> action => do_capture
     | <extern keyword> action => do_capture
     | <mutable keyword> action => do_capture
@@ -174,8 +183,6 @@ namespace_definition ::= named_namespace_definition action => do_grammar # TODO:
 named_namespace_definition # TODO: Full definition
     ::= (<namespace keyword>) identifier ('{') namespace_body ('}') action => do_grammar
         |  (<namespace keyword>) identifier ('{') ('}') action => do_grammar
-
-<deferred namespace_body> ::=
 
 namespace_body ::= declaration_seq action => do_grammar
 
@@ -337,7 +344,7 @@ punctuation ::= <punctuation token> action => do_capture
 ellipses ::= (<ellipses keyword>) action => do_capture
 
 <ident> ~ [\w]+
-<punctuation token> ~ [^\s\w]
+<punctuation token> ~ [^\s\w;] # TODO: This is all wrong
 non_at ~ [^@]+
 
 # Keywords
@@ -447,9 +454,9 @@ enum ::= <enum keyword> action => do_capture
 brace_balanced ::= 
       non_braces action => do_capture
     | '{' brace_balanced '}' action => do_capture
-    | brace_balanced '{' brace_balanced '}' action => do_capture
+    | non_braces '{' brace_balanced '}' action => do_capture
     | '{' brace_balanced '}' brace_balanced action => do_capture
-    | brace_balanced '{' brace_balanced '}' brace_balanced action => do_capture
+    | non_braces '{' brace_balanced '}' brace_balanced action => do_capture
 
 
 
@@ -472,6 +479,35 @@ END_OF_DSL
 
 my $doc;
 
+my $eager_grammar = Marpa::R2::Scanless::G->new( { source => \($eager_start.$dsl) } );
+
+sub parseCode {
+    my ($grammar, $input) = @_;
+    $recce = Marpa::R2::Scanless::R->new(
+	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
+    my $length_read = $recce->read( \$input );
+    my $value_ref;
+    my $matches = 0;
+    my $rank = -1000000;
+    my $parse_tree;
+    do {
+	eval {
+	    $value_ref = $recce->value;
+	    if($value_ref) {
+		my $value = $$value_ref;
+		my ($my_rank, $my_parse_tree) = @$value;
+		if($my_rank > $rank) {
+		    $rank = $my_rank;
+		    $parse_tree = $my_parse_tree;
+		}
+	    }
+	};
+	print $@;
+    } while ($@ || $value_ref);
+    
+    return $parse_tree;
+}
+
 sub insertXML {
     my ($doc, $tree) = @_;
     my $ignore = 0;
@@ -485,6 +521,13 @@ sub insertXML {
     }
     
     foreach my $key (keys %$tree) {
+	if($key =~ /^deferred/) {
+	    foreach my $deferred (@{$$tree{$key}}) {
+		my $parse_tree = parseCode($eager_grammar, $deferred);
+		insertXML($doc, $parse_tree);
+	    }
+	    next;
+	}
 	my $content = $$tree{$key};
 	if(ref($content) eq "ARRAY") {
 	    foreach my $value (@$content) {
@@ -523,9 +566,19 @@ sub extract_rank {
     my @deranked = map { my ($r, $i) = @$_; $rank += $r; $i } @ranked;
     return ($rank, \@deranked);
 };
+
+sub CodeProcess::do_deferred {
+    return [0, { 'declaration-seq' => {'deferred-declaration' => [ match_text() ] } }];
+}
+
+sub CodeProcess::do_deferred_seq {
+    my $declarations = $_[1]->[1]->{'declaration-seq'}->{'deferred-declaration'};
+    push(@$declarations, (values %{$_[2]->[1]}));
+    return [0, { 'declaration-seq' => {'deferred-declaration' => $declarations } }];
+}
  
 sub CodeProcess::do_dump {
-    print "matched: ".match_text()."\n";
+    print "matched: ".Dumper(@_)."\n";
 }
 
 sub CodeProcess::pass_through {
@@ -589,6 +642,10 @@ sub CodeProcess::do_grammar {
     return CodeProcess::do_grammar_inner(0, @_);
 }
 
+sub CodeProcess::do_grammar_1 {
+    return CodeProcess::do_grammar_inner(1, @_);
+}
+    
 sub CodeProcess::do_capture {
     my (undef, @args) = @_;
     my $rule_id     = $Marpa::R2::Context::rule;
@@ -647,7 +704,6 @@ sub CodeProcess::do_decl_specifier_seq {
 	bail("Duplicate decl-specifiers in decl-specifier-seq (dcl.spec/2)")
     }
 
-    print Dumper(@args);
     return CodeProcess::do_grammar(@_);
 }
 
@@ -831,10 +887,8 @@ DefConstructor('\testConst {} {}',
 DefConstructor('\foo', sub {
     $doc = $_[0];
     print "Running style file\n\n\n";
-    my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
-    $recce = Marpa::R2::Scanless::R->new(
-	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
-
+    my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
+	       
     my $input = << 'EOF';
 namespace std {
   using size_t = @\seebelow@;
@@ -855,39 +909,10 @@ namespace std {
   extern "C++" using @\placeholdernc{atexit-handler}@ = void();                        // \expos
   extern "C" using @\placeholdernc{c-compare-pred}@ = int(const void*, const void*);   // \expos
   extern "C++" using @\placeholdernc{compare-pred}@ = int(const void*, const void*);   // \expos
-
-  // \ref{support.start.term}, start and termination
-  [[noreturn]] void abort() noexcept;
-  int atexit(@\placeholder{c-atexit-handler}@* func) noexcept;
-  int atexit(@\placeholder{atexit-handler}@* func) noexcept;
-  int at_quick_exit(@\placeholder{c-atexit-handler}@* func) noexcept;
-  int at_quick_exit(@\placeholder{atexit-handler}@* func) noexcept;
-  [[noreturn]] void exit(int status);
-  [[noreturn]] void _Exit(int status) noexcept;
-  [[noreturn]] void quick_exit(int status) noexcept;
 }
 EOF
 
-    my $length_read = $recce->read( \$input );
-    my $value_ref;
-    my $matches = 0;
-    my $rank = -1000000;
-    my $parse_tree;
-    do {
-	eval {
-	    $value_ref = $recce->value;
-	    if($value_ref) {
-		my $value = $$value_ref;
-		my ($my_rank, $my_parse_tree) = @$value;
-		if($my_rank > $rank) {
-		    $rank = $my_rank;
-		    $parse_tree = $my_parse_tree;
-		}
-	    }
-	};
-	print $@;
-    } while ($@ || $value_ref);
-
+    my $parse_tree = parseCode($grammar, $input);
     insertXML($doc, $parse_tree);
 	       });
  
