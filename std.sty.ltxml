@@ -97,7 +97,8 @@ block_declaration ::=
     | alias_declaration action => do_grammar
 
 alias_declaration ::=
-    (<using keyword>) identifier ('=') defining_type_id (';') action => do_grammar
+      (<using keyword>) identifier ('=') defining_type_id (';') action => do_grammar
+    | (<using keyword>) identifier ('=') defining_type_id abstract_declarator (';') action => do_grammar
 
 simple_declaration ::= decl_specifier_seq (';') action => do_decl_specifier_seq
     | decl_specifier_seq init_declarator_list (';') action => do_grammar
@@ -176,7 +177,7 @@ balanced_token ::= '(' balanced_token_seq ')' action => do_balanced_token
     | '{' balanced_token_seq '}' action => do_balanced_token
     | token action => do_grammar # TODO: Change when tokens include grouping characters
 
-#A.7 Declarators
+# A.7 Declarators
 init_declarator_list ::= init_declarator+ separator => <comma keyword> action => do_grammar
 
 init_declarator ::= declarator action => do_grammar # TODO: Full definition
@@ -208,6 +209,17 @@ type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
 
 defining_type_id ::=                      # TODO: Full definition
     defining_type_specifier_seq action => do_grammar
+
+abstract_declarator ::=                   # TODO: Full definition
+      ptr_abstract_declarator action => do_grammar
+
+ptr_abstract_declarator ::=
+      noptr_abstract_declarator action => do_grammar
+    | ptr_operator action => do_grammar
+    | ptr_operator ptr_abstract_declarator action => do_grammar
+
+noptr_abstract_declarator ::=             # TODO: Full definition
+      parameters_and_qualifiers action => do_grammar
 
 parameter_declaration_clause ::= parameter_declaration_list action => do_grammar # TODO: Full definition
 
@@ -272,13 +284,10 @@ noexcept_specifier ::= <noexcept keyword> action => do_capture # TODO: Full defi
 
 # A.14 Preprocessing directives
 control_line ::=  # TODO: Full definition
-    ('#define') identifier replacement_list (new_line) action => do_grammar
+    ('#define') identifier replacement_list  action => do_grammar
 
 replacement_list ::= # TODO: Full definition (but seems unlikely this is worthwhile)
     RestOfLine action => do_capture
-
-new_line ::= 
-      <newline char> action => do_capture
 
 identifier ::= <ident> action => do_capture
     | standard_directive action => do_grammar
@@ -286,9 +295,6 @@ identifier ::= <ident> action => do_capture
 standard_directive ::= ('@') non_at ('@') action => do_capture
 punctuation ::= <punctuation token> action => do_capture
 ellipses ::= (<ellipses keyword>) action => do_capture
-
-:lexeme ~ <newline char> priority => 1
-<newline char> ~ [\n]
 
 <ident> ~ [\w]+
 <punctuation token> ~ [^\s\w]
@@ -793,7 +799,23 @@ DefConstructor('\foo', sub {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $input = << 'EOF';
+namespace std {
+  using size_t = @\seebelow@;
+  using div_t = @\seebelow@;
+  using ldiv_t = @\seebelow@;
+  using lldiv_t = @\seebelow@;
+}
+
 #define NULL @\seebelow@
+#define EXIT_FAILURE @\seebelow@
+#define EXIT_SUCCESS @\seebelow@
+#define RAND_MAX @\seebelow@
+#define MB_CUR_MAX @\seebelow@
+
+namespace std {
+  // Exposition-only function type aliases
+  using foo = void();
+}
 EOF
 
     my $length_read = $recce->read( \$input );
