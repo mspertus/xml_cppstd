@@ -182,7 +182,11 @@ init_declarator_list ::= init_declarator+ separator => <comma keyword> action =>
 
 init_declarator ::= declarator action => do_grammar # TODO: Full definition
 
-declarator ::= ptr_declarator action => do_grammar # TODO: Full definition
+declarator ::=
+    ptr_declarator action => do_grammar # TODO: Full definition
+<optional declarator> ::= declarator action => do_grammar
+<optional declarator> ::= action => do_grammar
+
 
 ptr_declarator ::= noptr_declarator action => do_grammar
     | ptr_operator noptr_declarator action => do_grammar
@@ -212,6 +216,9 @@ defining_type_id ::=                      # TODO: Full definition
 
 abstract_declarator ::=                   # TODO: Full definition
       ptr_abstract_declarator action => do_grammar
+<optional abstract_declarator> ::= abstract_declarator action => do_grammar
+<optional abstract_declarator> ::= action => do_grammar
+
 
 ptr_abstract_declarator ::=
       noptr_abstract_declarator action => do_grammar
@@ -226,7 +233,12 @@ parameter_declaration_clause ::= parameter_declaration_list action => do_grammar
 parameter_declaration_list ::=                                # TODO: Full definition
     parameter_declaration+ separator => <comma keyword> action => do_grammar
 
-parameter_declaration ::= decl_specifier_seq declarator action => do_grammar # TODO: Full definition
+
+parameter_declaration ::=                                                       # TODO: Full definition
+      decl_specifier_seq declarator action => do_grammar # TODO: Full definition
+    | attribute_specifier_seq  decl_specifier_seq declarator action => do_grammar
+    | decl_specifier_seq <optional abstract_declarator> action => do_grammar
+    | attribute_specifier_seq decl_specifier_seq <optional abstract_declarator> action => do_grammar
 
 # A.8 Classes
 class_key ::= <class keyword> action => do_capture
@@ -814,7 +826,20 @@ namespace std {
 
 namespace std {
   // Exposition-only function type aliases
-  using foo = void();
+  extern "C" using @\placeholdernc{c-atexit-handler}@ = void();                        // \expos
+  extern "C++" using @\placeholdernc{atexit-handler}@ = void();                        // \expos
+  extern "C" using @\placeholdernc{c-compare-pred}@ = int(const void*, const void*);   // \expos
+  extern "C++" using @\placeholdernc{compare-pred}@ = int(const void*, const void*);   // \expos
+
+  // \ref{support.start.term}, start and termination
+  [[noreturn]] void abort() noexcept;
+  int atexit(@\placeholder{c-atexit-handler}@* func) noexcept;
+  int atexit(@\placeholder{atexit-handler}@* func) noexcept;
+  int at_quick_exit(@\placeholder{c-atexit-handler}@* func) noexcept;
+  int at_quick_exit(@\placeholder{atexit-handler}@* func) noexcept;
+  [[noreturn]] void exit(int status);
+  [[noreturn]] void _Exit(int status) noexcept;
+  [[noreturn]] void quick_exit(int status) noexcept;
 }
 EOF
 
