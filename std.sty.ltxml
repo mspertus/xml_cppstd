@@ -581,7 +581,7 @@ sub parseCode {
 	};
 	print $@;
     } while ($@ || $value_ref);
-    
+
     return $parse_tree;
 }
 
@@ -756,24 +756,17 @@ sub CodeProcess::do_decl_specifier_seq {
     my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
     my @decl_specifiers = map { $$_{'decl-specifier'}} @args;
-    
+
     # Follow the rules in dcl.spec for valid decl-specifier-seqs
     # dcl.spec/2 Each decl-specifier can only appear once, except long, which can appear twice
     my %counts = ( long => 0);
     my $non_cv_defining_type_specifier_seen = 0;
+  
+    # The rules in dc.spec/3 seem too restrictive. Using dcl.type/2 instead
+    validate_type_specifier_seq (grep { exists($$_{'defining-type-specifier'}) } @decl_specifiers);
     
     foreach (@decl_specifiers) {
 	$counts{$$_{match}}++;
-
-	# TODO: Is this test accurate? I find dcl.spec/3 confusing.
-	if(exists($$_{'defining-type-specifier'}) 
-	   && (!exists($$_{'defining-type-specifier'}->{'type-specifier'})
-	       || !exists($$_{'defining-type-specifier'}->{'type-specifier'}->{'cv-qualifier'}))) {
-	    if($non_cv_defining_type_specifier_seen) {
-		bail("duplicate type names (dcl.spec/3)");
-	    }
-	    $non_cv_defining_type_specifier_seen = 1;
-	}
     }
     
     if($counts{long} > 2) {
@@ -783,7 +776,7 @@ sub CodeProcess::do_decl_specifier_seq {
     if (max(values %counts) > 1) {
 	bail("Duplicate decl-specifiers in decl-specifier-seq (dcl.spec/2)")
     }
-
+ 
     return CodeProcess::do_grammar(@_);
 }
 
@@ -793,8 +786,9 @@ sub validate_type_specifier_seq {
     my %counts = ('const' => 0, 'volatile' => 0, 'signed' => 0, 'unsigned' => 0,
 		  'char' => 0, 'long' => 0, 'short' => 0, 'int' => 0, 'double' => 0);
 
-    my @specifiers = map {values %{$_}} @args;
-    
+    # The 'match' element of the sequence is not a specifier.
+    my @specifiers = map {my $spec = $_; map { $$spec{$_} } (grep !/^match$/, (keys %$spec)) } @args;
+
     foreach my $specifier (@specifiers) {
 	$counts{$$specifier{match}}++;
     }
@@ -827,7 +821,7 @@ sub validate_type_specifier_seq {
 	$found_type = 1;
 	if($counts{long} == 1) {
 	    if($total != $counts{long} + $counts{int} + $counts{double} + $counts{signed} + $counts{unsigned}) {
-		Marpa::R2::Context::bail("long only modifies long/int/double (dcl.type/2)".match_text());
+		bail("long only modifies long/int/double (dcl.type/2)");
 	    }
 	} elsif($counts{long} == 2) {
 	    if ($counts{long} == 2 && $total != $counts{long} + $counts{int}) {
@@ -969,7 +963,7 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-  template<class T> class numeric_limits;
+  long int x;
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
