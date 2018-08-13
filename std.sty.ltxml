@@ -474,6 +474,8 @@ THE_REST ~ [^\n]+
 :discard ~ whitespace
 whitespace ~ [\s]+
 
+:discard ~ itcorr_minus_one
+itcorr_minus_one ~ '@\itcorr[-1]@' 
 END_OF_DSL
 
 
