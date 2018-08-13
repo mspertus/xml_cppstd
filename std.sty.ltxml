@@ -79,6 +79,11 @@ comment ::= '//' (RestOfLine) action => do_capture
 
 class_template_explicit_specialization ::= (<template keyword>) ('<') ('>') class_key simple_template_id (RestOfLine) action => do_grammar
 
+# A.1 Keywords
+class_name ::=
+      identifier action => do_grammar
+    | simple_template_id action => do_grammar
+
 # A.2 Lexical Conventions
 token ::= identifier action => do_grammar # TODO: Full definition and propagate changes to balanced_token
     | operator action => do_grammar
@@ -115,8 +120,9 @@ non_semis ::= non_semi+
 non_semi ::= punctuation | <ident>
 
 declaration ::= block_declaration action => do_grammar
-    | namespace_definition action => do_grammar
+    | template_declaration action => do_grammar
     | linkage_specification action => do_grammar
+    | namespace_definition action => do_grammar
     | class_template_explicit_specialization action => do_grammar
     | control_line action => do_grammar # Since we don't expand macros
     | comment action => do_ignore_1
@@ -150,7 +156,9 @@ storage_class_specifier ::=
     | <extern keyword> action => do_capture
     | <mutable keyword> action => do_capture
 
-type_specifier ::= simple_type_specifier action => do_grammar # TODO: Full definition
+type_specifier ::= 
+      simple_type_specifier action => do_grammar # TODO: Full definition
+    | elaborated_type_specifier action => do_grammar
     | cv_qualifier action => do_grammar
 
 type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
@@ -180,6 +188,10 @@ simple_type_specifier ::= type_name action => do_grammar # TODO: Full definition
 
 
 type_name ::= identifier action => do_grammar # TODO: Correct definition
+
+elaborated_type_specifier ::=    # todo: Full definition
+      class_key <optional attribute_specifier_seq> identifier action => do_grammar
+    | class_key simple_template_id action => do_grammar
 
 enum_specifier ::=           # todo: Full definition
     enum_head ('{') enumerator_list ('}') action => do_grammar
@@ -233,6 +245,8 @@ linkage_specification ::= (<extern keyword>) string_literal ('{') ('}') action =
     |  (<extern keyword>) string_literal declaration action => do_grammar
 
 attribute_specifier_seq ::= attribute_specifier+ action => do_grammar
+<optional attribute_specifier_seq> ::= attribute_specifier_seq action => do_grammar
+<optional attribute_specifier_seq> ::= action => do_grammar
 
 attribute_specifier ::= ('[') ('[') attribute_list (']') (']') action => do_grammar 
 
@@ -321,6 +335,18 @@ class_key ::= <class keyword> action => do_capture
     | <struct keyword> action => do_capture
     | <union keyword> action => do_capture
 
+class_head ::= # todo: Full definition
+    class_key <optional attribute_specifier_seq> class_head_name 
+           <optional class_virt_specifier> action => do_grammar
+
+class_head_name ::=     #todo: Full definition
+    class_name action => do_grammar
+
+class_virt_specifier ::=
+    <final keyword> action => do_capture
+<optional class_virt_specifier> ::= class_virt_specifier action => do_grammar
+<optional class_virt_specifier> ::= action => do_grammar
+
 # A.11 Overloading
 operator_function_id ::= (<operator keyword>) operator
 
@@ -334,10 +360,14 @@ operator_raw ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete
     | '++' | '--' | ','
 
 # A.12 Templates
-template_head ::= (<template keyword>) ('<') template_parameter_list ('>') action => do_grammar # TODO: Full definition
+template_declaration      # todo: Full definition
+    ::= template_head declaration action => do_grammar
 
-template_parameter_list ::= template_parameter action => do_list
-    | template_parameter_list (',') template_parameter action => do_list
+template_head             # todo: Full definition
+    ::= (<template keyword>) ('<') template_parameter_list ('>') action => do_grammar 
+
+template_parameter_list ::= 
+    template_parameter+ separator => <comma keyword> action => do_grammar
 
 template_parameter ::= type_parameter action => do_grammar # TODO: Full definition
 
@@ -422,6 +452,9 @@ enum ::= <enum keyword> action => do_capture
 
 :lexeme ~ <extern keyword> priority => 1
 <extern keyword> ~ 'extern'
+
+:lexeme ~ <final keyword> priority => 1
+<final keyword> ~ 'final'
 
 :lexeme ~ <float keyword> priority => 1
 <float keyword> ~ 'float'
@@ -533,6 +566,7 @@ sub parseCode {
     my $matches = 0;
     my $rank = -1000000;
     my $parse_tree;
+
     do {
 	eval {
 	    $value_ref = $recce->value;
@@ -562,7 +596,7 @@ sub insertXML {
     if(ref($tree) ne "HASH") {
 	print "***** Not a hash: ". Dumper($tree);
     }
-    
+
     foreach my $key (keys %$tree) {
 	if($key =~ /^deferred/) {
 	    foreach my $deferred (@{$$tree{$key}}) {
@@ -935,7 +969,7 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-  enum class byte : unsigned char {};
+  template<class T> class numeric_limits;
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
