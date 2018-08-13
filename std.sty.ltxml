@@ -77,8 +77,6 @@ lexeme default = latm => 1
 
 comment ::= '//' (RestOfLine) action => do_capture
 
-class_template_explicit_specialization ::= (<template keyword>) ('<') ('>') class_key simple_template_id (RestOfLine) action => do_grammar
-
 # A.1 Keywords
 class_name ::=
       identifier action => do_grammar
@@ -119,11 +117,12 @@ deferred_semi_delimited ::= non_semis ';' action => do_capture
 non_semis ::= non_semi+
 non_semi ::= punctuation | <ident>
 
-declaration ::= block_declaration action => do_grammar
+declaration ::=                # TODO: Correcgt definition
+      block_declaration action => do_grammar
     | template_declaration action => do_grammar
+    | explicit_specialization action => do_grammar
     | linkage_specification action => do_grammar
     | namespace_definition action => do_grammar
-    | class_template_explicit_specialization action => do_grammar
     | control_line action => do_grammar # Since we don't expand macros
     | comment action => do_ignore_1
     | storage_class_specifier action => do_ignore_1
@@ -395,6 +394,9 @@ template_argument_list ::= template_argument* action => do_grammar # TODO: actio
 
 template_argument ::= type_id action => do_capture # TODO: Full definition
 
+explicit_specialization ::=
+    (<template keyword>) ('<') ('>') declaration action => do_grammar
+
 # A.13 Exception handling
 noexcept_specifier ::= <noexcept keyword> action => do_capture # TODO: Full definition
 <optional noexcept_specifier> ::= noexcept_specifier action => do_grammar
@@ -579,7 +581,6 @@ sub parseCode {
 		}
 	    }
 	};
-	print $@;
     } while ($@ || $value_ref);
 
     return $parse_tree;
@@ -963,7 +964,94 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-  long int x;
+namespace std {
+  using size_t = @\seebelow@;
+  using div_t = @\seebelow@;
+  using ldiv_t = @\seebelow@;
+  using lldiv_t = @\seebelow@;
+}
+
+#define NULL @\seebelow@
+#define EXIT_FAILURE @\seebelow@
+#define EXIT_SUCCESS @\seebelow@
+#define RAND_MAX @\seebelow@
+#define MB_CUR_MAX @\seebelow@
+
+namespace std {
+  // Exposition-only function type aliases
+  extern "C" using @\placeholdernc{c-atexit-handler}@ = void();                        // \expos
+  extern "C++" using @\placeholdernc{atexit-handler}@ = void();                        // \expos
+  extern "C" using @\placeholdernc{c-compare-pred}@ = int(const void*, const void*);   // \expos
+  extern "C++" using @\placeholdernc{compare-pred}@ = int(const void*, const void*);   // \expos
+
+  // \ref{support.start.term}, start and termination
+  [[noreturn]] void abort() noexcept;
+  int atexit(@\placeholder{c-atexit-handler}@* func) noexcept;
+  int atexit(@\placeholder{atexit-handler}@* func) noexcept;
+  int at_quick_exit(@\placeholder{c-atexit-handler}@* func) noexcept;
+  int at_quick_exit(@\placeholder{atexit-handler}@* func) noexcept;
+  [[noreturn]] void exit(int status);
+  [[noreturn]] void _Exit(int status) noexcept;
+  [[noreturn]] void quick_exit(int status) noexcept;
+
+  char* getenv(const char* name);
+  int system(const char* string);
+
+  // \ref{c.malloc}, C library memory allocation
+  void* aligned_alloc(size_t alignment, size_t size);
+  void* calloc(size_t nmemb, size_t size);
+  void free(void* ptr);
+  void* malloc(size_t size);
+  void* realloc(void* ptr, size_t size);
+
+  double atof(const char* nptr);
+  int atoi(const char* nptr);
+  long int atol(const char* nptr);
+  long long int atoll(const char* nptr);
+  double strtod(const char* nptr, char** endptr);
+  float strtof(const char* nptr, char** endptr);
+  long double strtold(const char* nptr, char** endptr);
+  long int strtol(const char* nptr, char** endptr, int base);
+  long long int strtoll(const char* nptr, char** endptr, int base);
+  unsigned long int strtoul(const char* nptr, char** endptr, int base);
+  unsigned long long int strtoull(const char* nptr, char** endptr, int base);
+
+  // \ref{c.mb.wcs}, multibyte / wide string and character conversion functions
+  int mblen(const char* s, size_t n);
+  int mbtowc(wchar_t* pwc, const char* s, size_t n);
+  int wctomb(char* s, wchar_t wchar);
+  size_t mbstowcs(wchar_t* pwcs, const char* s, size_t n);
+  size_t wcstombs(char* s, const wchar_t* pwcs, size_t n);
+
+  // \ref{alg.c.library}, C standard library algorithms
+  void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
+                @\placeholder{c-compare-pred}@*@\itcorr[-1]@ compar);
+  void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
+                @\placeholder{compare-pred}@*@\itcorr[-1]@ compar);
+  void qsort(void* base, size_t nmemb, size_t size, @\placeholder{c-compare-pred}@*@\itcorr[-1]@ compar);
+  void qsort(void* base, size_t nmemb, size_t size, @\placeholder{compare-pred}@*@\itcorr[-1]@ compar);
+
+  // \ref{c.math.rand}, low-quality random number generation
+  int rand();
+  void srand(unsigned int seed);
+
+  // \ref{c.math.abs}, absolute values
+  int abs(int j);
+  long int abs(long int j);
+  long long int abs(long long int j);
+  float abs(float j);
+  double abs(double j);
+  long double abs(long double j);
+
+  long int labs(long int j);
+  long long int llabs(long long int j);
+
+  div_t div(int numer, int denom);
+  ldiv_t div(long int numer, long int denom);             // see \ref{library.c}
+  lldiv_t div(long long int numer, long long int denom);  // see \ref{library.c}
+  ldiv_t ldiv(long int numer, long int denom);
+  lldiv_t lldiv(long long int numer, long long int denom);
+}
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
