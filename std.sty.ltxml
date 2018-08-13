@@ -128,12 +128,13 @@ declaration ::= block_declaration action => do_grammar
 block_declaration ::=
       simple_declaration action => do_grammar
     | alias_declaration action => do_grammar
+    | opaque_enum_declaration action => do_grammar_1  # enum foo; is an enumeration. Not a variable of type enum
 
 alias_declaration ::=
       (<using keyword>) identifier ('=') defining_type_id (';') action => do_grammar
     | (<using keyword>) identifier ('=') defining_type_id abstract_declarator (';') action => do_grammar
 
-simple_declaration ::= decl_specifier_seq (';') action => do_decl_specifier_seq
+simple_declaration ::= decl_specifier_seq (';') action => do_grammar
     | decl_specifier_seq init_declarator_list (';') action => do_grammar
     | attribute_specifier_seq decl_specifier_seq (';') action => do_grammar
     | attribute_specifier_seq decl_specifier_seq init_declarator_list (';') action => do_grammar
@@ -141,10 +142,10 @@ simple_declaration ::= decl_specifier_seq (';') action => do_decl_specifier_seq
 decl_specifier ::= storage_class_specifier action => do_grammar # TODO: Full definition
     | defining_type_specifier action => do_grammar
 
-decl_specifier_seq ::= decl_specifier+ action => do_grammar # TODO: Full definition
+decl_specifier_seq ::= decl_specifier+ action => do_decl_specifier_seq # TODO: Full definition
 
-storage_class_specifier ::= <static keyword> action => do_capture
-
+storage_class_specifier ::= 
+      <static keyword> action => do_capture
     | <thread_local keyword> action => do_capture
     | <extern keyword> action => do_capture
     | <mutable keyword> action => do_capture
@@ -154,7 +155,9 @@ type_specifier ::= simple_type_specifier action => do_grammar # TODO: Full defin
 
 type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
 
-defining_type_specifier ::= type_specifier action => do_grammar # TODO: Full definition
+defining_type_specifier ::= 
+      type_specifier action => do_grammar # TODO: Full definition
+    | enum_specifier action => do_grammar
 
 defining_type_specifier_seq ::=      # TODO: Full definition
     defining_type_specifier+ action => do_defining_type_specifier_seq
@@ -177,6 +180,44 @@ simple_type_specifier ::= type_name action => do_grammar # TODO: Full definition
 
 
 type_name ::= identifier action => do_grammar # TODO: Correct definition
+
+enum_specifier ::=           # todo: Full definition
+    enum_head ('{') enumerator_list ('}') action => do_grammar
+
+enum_head ::=
+    enum_key <optional enum_head_name> <optional enum_base> action => do_grammar
+<optional enum_head> ::= enum_head action => do_grammar
+<optional enum_head> ::= action => do_grammar
+
+
+enum_head_name ::=             # todo: Full definition
+    identifier  action => do_grammar
+<optional enum_head_name> ::= enum_head_name action => do_grammar
+<optional enum_head_name> ::= action => do_grammar
+
+# Note. Standard synopses have illegal opaque enum declarations, such as
+# float_round_style in limits.syn. We accept these to parse the standard
+opaque_enum_declaration ::=      # todo: Full definition
+    enum_key identifier <optional enum_base> (';') action => do_grammar
+
+enum_key ::=
+      <enum keyword> action => do_capture
+    | <enum keyword> <class keyword> action => do_capture
+    | <enum keyword> <struct keyword> action => do_capture
+
+enum_base ::=      # todo: Full definition
+    (':') type_specifier_seq action => do_grammar
+<optional enum_base> ::= enum_base action => do_grammar
+<optional enum_base> ::= action => do_grammar
+
+enumerator_list ::=
+    enumerator_definition* separator => <comma keyword> action => do_grammar 
+
+enumerator_definition ::= # todo: Full definition
+    enumerator
+
+enumerator ::=     # todo: Full definition
+    identifier action => do_grammar
 
 namespace_definition ::= named_namespace_definition action => do_grammar # TODO: Full definition
 
@@ -581,6 +622,9 @@ sub CodeProcess::do_deferred_seq {
  
 sub CodeProcess::do_dump {
     print "matched: ".Dumper(@_)."\n";
+    my $result = CodeProcess::do_grammar(@_);
+    print "result: ".Dumper($result);
+    return $result;
 }
 
 sub CodeProcess::pass_through {
@@ -622,7 +666,6 @@ sub CodeProcess::do_grammar_inner {
     
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
-
     my %result;
     tie(%result, 'Tie::IxHash');
 
@@ -678,8 +721,8 @@ sub CodeProcess::do_list {
 sub CodeProcess::do_decl_specifier_seq {
     my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
-    my @decl_specifiers = @{$args[0]->{'decl-specifier-seq'}->{'decl-specifier'}};
-
+    my @decl_specifiers = map { $$_{'decl-specifier'}} @args;
+    
     # Follow the rules in dcl.spec for valid decl-specifier-seqs
     # dcl.spec/2 Each decl-specifier can only appear once, except long, which can appear twice
     my %counts = ( long => 0);
@@ -690,7 +733,8 @@ sub CodeProcess::do_decl_specifier_seq {
 
 	# TODO: Is this test accurate? I find dcl.spec/3 confusing.
 	if(exists($$_{'defining-type-specifier'}) 
-	   && !exists($$_{'defining-type-specifier'}->{'type-specifier'}->{'cv-qualifier'})) {
+	   && (!exists($$_{'defining-type-specifier'}->{'type-specifier'})
+	       || !exists($$_{'defining-type-specifier'}->{'type-specifier'}->{'cv-qualifier'}))) {
 	    if($non_cv_defining_type_specifier_seen) {
 		bail("duplicate type names (dcl.spec/3)");
 	    }
@@ -877,7 +921,6 @@ DefConstructor('\@@listings@block {} {}',
 DefConstructor('\testConst {} {}', 
     sub {   my ($document, $one, $two, %props) = @_; 
             $document->absorb(Tokenize($props{foo})); },
-    # '#foo',
     afterDigest => sub {
 	my ($stomach, $whatsit) = @_;
 	print $whatsit->getDefinition;
@@ -892,97 +935,11 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-namespace std {
-  using size_t = @\seebelow@;
-  using div_t = @\seebelow@;
-  using ldiv_t = @\seebelow@;
-  using lldiv_t = @\seebelow@;
-}
-
-#define NULL @\seebelow@
-#define EXIT_FAILURE @\seebelow@
-#define EXIT_SUCCESS @\seebelow@
-#define RAND_MAX @\seebelow@
-#define MB_CUR_MAX @\seebelow@
-
-namespace std {
-  // Exposition-only function type aliases
-  extern "C" using @\placeholdernc{c-atexit-handler}@ = void();                        // \expos
-  extern "C++" using @\placeholdernc{atexit-handler}@ = void();                        // \expos
-  extern "C" using @\placeholdernc{c-compare-pred}@ = int(const void*, const void*);   // \expos
-  extern "C++" using @\placeholdernc{compare-pred}@ = int(const void*, const void*);   // \expos
-
-  // \ref{support.start.term}, start and termination
-  [[noreturn]] void abort() noexcept;
-  int atexit(@\placeholder{c-atexit-handler}@* func) noexcept;
-  int atexit(@\placeholder{atexit-handler}@* func) noexcept;
-  int at_quick_exit(@\placeholder{c-atexit-handler}@* func) noexcept;
-  int at_quick_exit(@\placeholder{atexit-handler}@* func) noexcept;
-  [[noreturn]] void exit(int status);
-  [[noreturn]] void _Exit(int status) noexcept;
-  [[noreturn]] void quick_exit(int status) noexcept;
-
-  char* getenv(const char* name);
-  int system(const char* string);
-
-  // \ref{c.malloc}, C library memory allocation
-  void* aligned_alloc(size_t alignment, size_t size);
-  void* calloc(size_t nmemb, size_t size);
-  void free(void* ptr);
-  void* malloc(size_t size);
-  void* realloc(void* ptr, size_t size);
-
-  double atof(const char* nptr);
-  int atoi(const char* nptr);
-  long int atol(const char* nptr);
-  long long int atoll(const char* nptr);
-  double strtod(const char* nptr, char** endptr);
-  float strtof(const char* nptr, char** endptr);
-  long double strtold(const char* nptr, char** endptr);
-  long int strtol(const char* nptr, char** endptr, int base);
-  long long int strtoll(const char* nptr, char** endptr, int base);
-  unsigned long int strtoul(const char* nptr, char** endptr, int base);
-  unsigned long long int strtoull(const char* nptr, char** endptr, int base);
-
-  // \ref{c.mb.wcs}, multibyte / wide string and character conversion functions
-  int mblen(const char* s, size_t n);
-  int mbtowc(wchar_t* pwc, const char* s, size_t n);
-  int wctomb(char* s, wchar_t wchar);
-  size_t mbstowcs(wchar_t* pwcs, const char* s, size_t n);
-  size_t wcstombs(char* s, const wchar_t* pwcs, size_t n);
-
-  // \ref{alg.c.library}, C standard library algorithms
-  void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
-                @\placeholder{c-compare-pred}@*@\itcorr[-1]@ compar);
-  void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
-                @\placeholder{compare-pred}@*@\itcorr[-1]@ compar);
-  void qsort(void* base, size_t nmemb, size_t size, @\placeholder{c-compare-pred}@*@\itcorr[-1]@ compar);
-  void qsort(void* base, size_t nmemb, size_t size, @\placeholder{compare-pred}@*@\itcorr[-1]@ compar);
-
-  // \ref{c.math.rand}, low-quality random number generation
-  int rand();
-  void srand(unsigned int seed);
-
-  // \ref{c.math.abs}, absolute values
-  int abs(int j);
-  long int abs(long int j);
-  long long int abs(long long int j);
-  float abs(float j);
-  double abs(double j);
-  long double abs(long double j);
-
-  long int labs(long int j);
-  long long int llabs(long long int j);
-
-  div_t div(int numer, int denom);
-  ldiv_t div(long int numer, long int denom);             // see \ref{library.c}
-  lldiv_t div(long long int numer, long long int denom);  // see \ref{library.c}
-  ldiv_t ldiv(long int numer, long int denom);
-  lldiv_t lldiv(long long int numer, long long int denom);
-}
+  enum class byte : unsigned char {};
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
+#    print Dumper($parse_tree);
     insertXML($doc, $parse_tree);
 	       });
  
