@@ -548,7 +548,7 @@ brace_balanced ::=
     | non_braces '{' brace_balanced '}' action => do_capture
     | '{' brace_balanced '}' brace_balanced action => do_capture
     | non_braces '{' brace_balanced '}' brace_balanced action => do_capture
-
+brace_balanced ::=
 
 
 non_braces ~ [^{}]+
@@ -987,11 +987,13 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-  constexpr byte& operator|=(byte& l, byte r) noexcept;
+namespace std {
+  enum class byte : unsigned char {};
+}
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
-
+    print Dumper($parse_tree);
     insertXML($doc, $parse_tree);
 	       });
  
