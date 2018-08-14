@@ -15,7 +15,7 @@ use strict;
 use warnings;
 use LaTeXML::Package;
 use String::Util 'trim';
-use List::Util 'sum';
+use List::Util 'sum', 'all';
 use Marpa::R2;
 use Data::Dumper;
 use Tie::IxHash;
@@ -93,7 +93,9 @@ s_char ~ [^"\\\n]
 
 # A.4 Expressions
 id_expression ::= unqualified_id  # TODO: Full definition
-unqualified_id ::= identifier   # TODO: Full definition
+unqualified_id ::=         # todo: Full definition
+      identifier 
+    | operator_function_id
 
 # A.6 Declarations
 declaration_seq ::= 
@@ -116,7 +118,7 @@ deferred_semi_delimited ::= non_semis ';' action => do_capture
 non_semis ::= non_semi+ action => pass_through
 non_semi ::= punctuation | <ident> action => pass_through
 
-declaration ::=                # TODO: Correcgt definition
+declaration ::=                # TODO: Correct definition
       block_declaration 
     | template_declaration 
     | explicit_specialization 
@@ -143,8 +145,13 @@ simple_declaration ::= decl_specifier_seq (';')
     | attribute_specifier_seq decl_specifier_seq (';') 
     | attribute_specifier_seq decl_specifier_seq init_declarator_list (';') 
 
-decl_specifier ::= storage_class_specifier  # TODO: Full definition
-    | defining_type_specifier 
+decl_specifier ::= 
+      storage_class_specifier  # todo: Full definition
+    | defining_type_specifier
+    | <friend keyword>
+    | <typedef keyword>
+    | <constexpr keyword>
+    | <inline keyword>
 
 decl_specifier_seq ::= decl_specifier+ action => do_decl_specifier_seq # TODO: Full definition
 
@@ -348,9 +355,7 @@ class_virt_specifier ::=
 # A.11 Overloading
 operator_function_id ::= (<operator keyword>) operator
 
-operator ::= operator_raw action => do_operator
-
-operator_raw ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete keyword> '[]'
+operator ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete keyword> '[]'
     | '()' | '[]' | '->' | '->*' 
     | '~' | '!' | '+' | '-' | '*' | '/' | '%' | '^' | '&' | '|'
     | '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '^=' | '&=' | '|=' | '==' | '!='
@@ -441,6 +446,9 @@ non_at ~ [^@]+
 :lexeme ~ <const keyword> priority => 1
 <const keyword> ~ 'const'
 
+:lexeme ~ <constexpr keyword> priority => 1
+<constexpr keyword> ~ 'constexpr'
+
 :lexeme ~ <delete keyword> priority => 1
 <delete keyword> ~ 'delete'
 
@@ -459,6 +467,12 @@ enum ::= <enum keyword> action => do_capture
 
 :lexeme ~ <float keyword> priority => 1
 <float keyword> ~ 'float'
+
+:lexeme ~ <friend keyword> priority => 1
+<friend keyword> ~ 'friend'
+
+:lexeme ~ <inline keyword> priority => 1
+<inline keyword> ~ 'inline'
 
 :lexeme ~ <int keyword> priority => 1
 <int keyword> ~ 'int'
@@ -499,6 +513,8 @@ enum ::= <enum keyword> action => do_capture
 :lexeme ~ <thread_local keyword> priority => 1
 <thread_local keyword> ~ 'thread_local'
 
+:lexeme ~ <typedef keyword> priority => 1
+<typedef keyword> ~ 'typedef'
 
 :lexeme ~ <typename keyword> priority => 1
 <typename keyword> ~ 'typename'
@@ -691,9 +707,7 @@ sub CodeProcess::do_ignore_1 {
 }
 
 sub CodeProcess::do_grammar_inner {
-    my ($rank, $deranked) = extract_rank (@_);
-    my @args = @$deranked;
-    
+  
     my $rule_id     = $Marpa::R2::Context::rule;
     my $slg         = $Marpa::R2::Context::slg;
 
@@ -704,12 +718,19 @@ sub CodeProcess::do_grammar_inner {
 	}
 	return 0;
     };
-    
     my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
     $nonterminal=~s/_/-/g;
+
+
     my %result;
     tie(%result, 'Tie::IxHash');
+    if(all { ref($_) eq "" } @_[2 .. $#_]) {
+	return [$_[0], { $nonterminal => match_text}];
+    }
 
+    my ($rank, $deranked) = extract_rank (@_);
+    my @args = @$deranked;
+	    
     my $optional = ($nonterminal =~ /^<optional /);
     
     if($is_quantitative->($rule_id)) {
@@ -764,10 +785,11 @@ sub CodeProcess::do_decl_specifier_seq {
     my $non_cv_defining_type_specifier_seen = 0;
   
     # The rules in dc.spec/3 seem too restrictive. Using dcl.type/2 instead
-    validate_type_specifier_seq (grep { exists($$_{'defining-type-specifier'}) } @decl_specifiers);
+    validate_type_specifier_seq (
+	grep { ref($_) eq 'HASH' and exists($$_{'defining-type-specifier'}) } @decl_specifiers);
     
     foreach (@decl_specifiers) {
-	$counts{$$_{match}}++;
+	$counts{ref($_) eq 'HASH' ? $$_{match} : $_}++;
     }
     
     if($counts{long} > 2) {
@@ -877,6 +899,7 @@ sub CodeProcess::do_balanced_token {
 
 # A.11 Overloading
 sub CodeProcess::do_operator {
+    print "in operator";
     my (undef, @args) = @_;
     my $args0 = $args[0];
     my (undef, @tokens) = @$args0;
@@ -964,94 +987,7 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-namespace std {
-  using size_t = @\seebelow@;
-  using div_t = @\seebelow@;
-  using ldiv_t = @\seebelow@;
-  using lldiv_t = @\seebelow@;
-}
-
-#define NULL @\seebelow@
-#define EXIT_FAILURE @\seebelow@
-#define EXIT_SUCCESS @\seebelow@
-#define RAND_MAX @\seebelow@
-#define MB_CUR_MAX @\seebelow@
-
-namespace std {
-  // Exposition-only function type aliases
-  extern "C" using @\placeholdernc{c-atexit-handler}@ = void();                        // \expos
-  extern "C++" using @\placeholdernc{atexit-handler}@ = void();                        // \expos
-  extern "C" using @\placeholdernc{c-compare-pred}@ = int(const void*, const void*);   // \expos
-  extern "C++" using @\placeholdernc{compare-pred}@ = int(const void*, const void*);   // \expos
-
-  // \ref{support.start.term}, start and termination
-  [[noreturn]] void abort() noexcept;
-  int atexit(@\placeholder{c-atexit-handler}@* func) noexcept;
-  int atexit(@\placeholder{atexit-handler}@* func) noexcept;
-  int at_quick_exit(@\placeholder{c-atexit-handler}@* func) noexcept;
-  int at_quick_exit(@\placeholder{atexit-handler}@* func) noexcept;
-  [[noreturn]] void exit(int status);
-  [[noreturn]] void _Exit(int status) noexcept;
-  [[noreturn]] void quick_exit(int status) noexcept;
-
-  char* getenv(const char* name);
-  int system(const char* string);
-
-  // \ref{c.malloc}, C library memory allocation
-  void* aligned_alloc(size_t alignment, size_t size);
-  void* calloc(size_t nmemb, size_t size);
-  void free(void* ptr);
-  void* malloc(size_t size);
-  void* realloc(void* ptr, size_t size);
-
-  double atof(const char* nptr);
-  int atoi(const char* nptr);
-  long int atol(const char* nptr);
-  long long int atoll(const char* nptr);
-  double strtod(const char* nptr, char** endptr);
-  float strtof(const char* nptr, char** endptr);
-  long double strtold(const char* nptr, char** endptr);
-  long int strtol(const char* nptr, char** endptr, int base);
-  long long int strtoll(const char* nptr, char** endptr, int base);
-  unsigned long int strtoul(const char* nptr, char** endptr, int base);
-  unsigned long long int strtoull(const char* nptr, char** endptr, int base);
-
-  // \ref{c.mb.wcs}, multibyte / wide string and character conversion functions
-  int mblen(const char* s, size_t n);
-  int mbtowc(wchar_t* pwc, const char* s, size_t n);
-  int wctomb(char* s, wchar_t wchar);
-  size_t mbstowcs(wchar_t* pwcs, const char* s, size_t n);
-  size_t wcstombs(char* s, const wchar_t* pwcs, size_t n);
-
-  // \ref{alg.c.library}, C standard library algorithms
-  void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
-                @\placeholder{c-compare-pred}@*@\itcorr[-1]@ compar);
-  void* bsearch(const void* key, const void* base, size_t nmemb, size_t size,
-                @\placeholder{compare-pred}@*@\itcorr[-1]@ compar);
-  void qsort(void* base, size_t nmemb, size_t size, @\placeholder{c-compare-pred}@*@\itcorr[-1]@ compar);
-  void qsort(void* base, size_t nmemb, size_t size, @\placeholder{compare-pred}@*@\itcorr[-1]@ compar);
-
-  // \ref{c.math.rand}, low-quality random number generation
-  int rand();
-  void srand(unsigned int seed);
-
-  // \ref{c.math.abs}, absolute values
-  int abs(int j);
-  long int abs(long int j);
-  long long int abs(long long int j);
-  float abs(float j);
-  double abs(double j);
-  long double abs(long double j);
-
-  long int labs(long int j);
-  long long int llabs(long long int j);
-
-  div_t div(int numer, int denom);
-  ldiv_t div(long int numer, long int denom);             // see \ref{library.c}
-  lldiv_t div(long long int numer, long long int denom);  // see \ref{library.c}
-  ldiv_t ldiv(long int numer, long int denom);
-  lldiv_t lldiv(long long int numer, long long int denom);
-}
+  constexpr byte& operator|=(byte& l, byte r) noexcept;
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
