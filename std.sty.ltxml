@@ -72,19 +72,19 @@ my $lazy_start = ":start ::= declaration_seq\n";
 my $eager_start = ":start ::= declaration\n";
     
 my $dsl = <<'END_OF_DSL';
-:default ::= action => [name,values]
+:default ::= action => do_grammar
 lexeme default = latm => 1
 
 comment ::= '//' (RestOfLine) action => do_capture
 
 # A.1 Keywords
 class_name ::=
-      identifier action => do_grammar
-    | simple_template_id action => do_grammar
+      identifier 
+    | simple_template_id 
 
 # A.2 Lexical Conventions
-token ::= identifier action => do_grammar # TODO: Full definition and propagate changes to balanced_token
-    | operator action => do_grammar
+token ::= identifier  # TODO: Full definition and propagate changes to balanced_token
+    | operator 
 
 string_literal ::= ('"') s_char_sequence ('"') action => do_capture
 
@@ -92,11 +92,10 @@ s_char_sequence ~ s_char+
 s_char ~ [^"\\\n]
 
 # A.4 Expressions
-id_expression ::= unqualified_id action => do_grammar # TODO: Full definition
-unqualified_id ::= identifier action => do_grammar  # TODO: Full definition
+id_expression ::= unqualified_id  # TODO: Full definition
+unqualified_id ::= identifier   # TODO: Full definition
 
 # A.6 Declarations
-eager_declaration_seq ::= declaration+ action => do_grammar
 declaration_seq ::= 
       deferred_namespace                               rank => 2 action => do_deferred
     | comment                                          rank => 1 action => do_deferred 
@@ -114,16 +113,16 @@ deferred_preprocessor ::=
     '#' RestOfLine action => do_capture
 
 deferred_semi_delimited ::= non_semis ';' action => do_capture
-non_semis ::= non_semi+
-non_semi ::= punctuation | <ident>
+non_semis ::= non_semi+ action => pass_through
+non_semi ::= punctuation | <ident> action => pass_through
 
 declaration ::=                # TODO: Correcgt definition
-      block_declaration action => do_grammar
-    | template_declaration action => do_grammar
-    | explicit_specialization action => do_grammar
-    | linkage_specification action => do_grammar
-    | namespace_definition action => do_grammar
-    | control_line action => do_grammar # Since we don't expand macros
+      block_declaration 
+    | template_declaration 
+    | explicit_specialization 
+    | linkage_specification 
+    | namespace_definition 
+    | control_line  # Since we don't expand macros
     | comment action => do_ignore_1
     | storage_class_specifier action => do_ignore_1
     | operator action => do_ignore_1
@@ -131,21 +130,21 @@ declaration ::=                # TODO: Correcgt definition
     | punctuation action => do_ignore_1
 
 block_declaration ::=
-      simple_declaration action => do_grammar
-    | alias_declaration action => do_grammar
+      simple_declaration 
+    | alias_declaration 
     | opaque_enum_declaration action => do_grammar_1  # enum foo; is an enumeration. Not a variable of type enum
 
 alias_declaration ::=
-      (<using keyword>) identifier ('=') defining_type_id (';') action => do_grammar
-    | (<using keyword>) identifier ('=') defining_type_id abstract_declarator (';') action => do_grammar
+      (<using keyword>) identifier ('=') defining_type_id (';') 
+    | (<using keyword>) identifier ('=') defining_type_id abstract_declarator (';') 
 
-simple_declaration ::= decl_specifier_seq (';') action => do_grammar
-    | decl_specifier_seq init_declarator_list (';') action => do_grammar
-    | attribute_specifier_seq decl_specifier_seq (';') action => do_grammar
-    | attribute_specifier_seq decl_specifier_seq init_declarator_list (';') action => do_grammar
+simple_declaration ::= decl_specifier_seq (';') 
+    | decl_specifier_seq init_declarator_list (';') 
+    | attribute_specifier_seq decl_specifier_seq (';') 
+    | attribute_specifier_seq decl_specifier_seq init_declarator_list (';') 
 
-decl_specifier ::= storage_class_specifier action => do_grammar # TODO: Full definition
-    | defining_type_specifier action => do_grammar
+decl_specifier ::= storage_class_specifier  # TODO: Full definition
+    | defining_type_specifier 
 
 decl_specifier_seq ::= decl_specifier+ action => do_decl_specifier_seq # TODO: Full definition
 
@@ -156,20 +155,20 @@ storage_class_specifier ::=
     | <mutable keyword> action => do_capture
 
 type_specifier ::= 
-      simple_type_specifier action => do_grammar # TODO: Full definition
-    | elaborated_type_specifier action => do_grammar
-    | cv_qualifier action => do_grammar
+      simple_type_specifier  # TODO: Full definition
+    | elaborated_type_specifier 
+    | cv_qualifier 
 
 type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
 
 defining_type_specifier ::= 
-      type_specifier action => do_grammar # TODO: Full definition
-    | enum_specifier action => do_grammar
+      type_specifier  # TODO: Full definition
+    | enum_specifier 
 
 defining_type_specifier_seq ::=      # TODO: Full definition
     defining_type_specifier+ action => do_defining_type_specifier_seq
 
-simple_type_specifier ::= type_name action => do_grammar # TODO: Full definition
+simple_type_specifier ::= type_name  # TODO: Full definition
     | <char keyword> action => do_capture
     | <char16_t keyword> action => do_capture
     | <char32_t keyword> action => do_capture
@@ -186,30 +185,30 @@ simple_type_specifier ::= type_name action => do_grammar # TODO: Full definition
     | <auto keyword> action => do_capture
 
 
-type_name ::= identifier action => do_grammar # TODO: Correct definition
+type_name ::= identifier  # TODO: Correct definition
 
 elaborated_type_specifier ::=    # todo: Full definition
-      class_key <optional attribute_specifier_seq> identifier action => do_grammar
-    | class_key simple_template_id action => do_grammar
+      class_key <optional attribute_specifier_seq> identifier 
+    | class_key simple_template_id 
 
 enum_specifier ::=           # todo: Full definition
-    enum_head ('{') enumerator_list ('}') action => do_grammar
+    enum_head ('{') enumerator_list ('}') 
 
 enum_head ::=
-    enum_key <optional enum_head_name> <optional enum_base> action => do_grammar
-<optional enum_head> ::= enum_head action => do_grammar
-<optional enum_head> ::= action => do_grammar
+    enum_key <optional enum_head_name> <optional enum_base> 
+<optional enum_head> ::= enum_head 
+<optional enum_head> ::= 
 
 
 enum_head_name ::=             # todo: Full definition
-    identifier  action => do_grammar
-<optional enum_head_name> ::= enum_head_name action => do_grammar
-<optional enum_head_name> ::= action => do_grammar
+    identifier  
+<optional enum_head_name> ::= enum_head_name 
+<optional enum_head_name> ::= 
 
 # Note. Standard synopses have illegal opaque enum declarations, such as
 # float_round_style in limits.syn. We accept these to parse the standard
 opaque_enum_declaration ::=      # todo: Full definition
-    enum_key identifier <optional enum_base> (';') action => do_grammar
+    enum_key identifier <optional enum_base> (';') 
 
 enum_key ::=
       <enum keyword> action => do_capture
@@ -217,75 +216,75 @@ enum_key ::=
     | <enum keyword> <struct keyword> action => do_capture
 
 enum_base ::=      # todo: Full definition
-    (':') type_specifier_seq action => do_grammar
-<optional enum_base> ::= enum_base action => do_grammar
-<optional enum_base> ::= action => do_grammar
+    (':') type_specifier_seq 
+<optional enum_base> ::= enum_base 
+<optional enum_base> ::= 
 
 enumerator_list ::=
-    enumerator_definition* separator => <comma keyword> action => do_grammar 
+    enumerator_definition* separator => <comma keyword>  
 
 enumerator_definition ::= # todo: Full definition
     enumerator
 
 enumerator ::=     # todo: Full definition
-    identifier action => do_grammar
+    identifier 
 
-namespace_definition ::= named_namespace_definition action => do_grammar # TODO: Full definition
+namespace_definition ::= named_namespace_definition  # TODO: Full definition
 
 named_namespace_definition # TODO: Full definition
-    ::= (<namespace keyword>) identifier ('{') namespace_body ('}') action => do_grammar
-        |  (<namespace keyword>) identifier ('{') ('}') action => do_grammar
+    ::= (<namespace keyword>) identifier ('{') namespace_body ('}') 
+        |  (<namespace keyword>) identifier ('{') ('}') 
 
-namespace_body ::= declaration_seq action => do_grammar
+namespace_body ::= declaration_seq 
 
 
-linkage_specification ::= (<extern keyword>) string_literal ('{') ('}') action => do_grammar
-    | (<extern keyword>) string_literal ('{') declaration_seq ('}') action => do_grammar
-    |  (<extern keyword>) string_literal declaration action => do_grammar
+linkage_specification ::= (<extern keyword>) string_literal ('{') ('}') 
+    | (<extern keyword>) string_literal ('{') declaration_seq ('}') 
+    |  (<extern keyword>) string_literal declaration 
 
-attribute_specifier_seq ::= attribute_specifier+ action => do_grammar
-<optional attribute_specifier_seq> ::= attribute_specifier_seq action => do_grammar
-<optional attribute_specifier_seq> ::= action => do_grammar
+attribute_specifier_seq ::= attribute_specifier+ 
+<optional attribute_specifier_seq> ::= attribute_specifier_seq 
+<optional attribute_specifier_seq> ::= 
 
-attribute_specifier ::= ('[') ('[') attribute_list (']') (']') action => do_grammar 
+attribute_specifier ::= ('[') ('[') attribute_list (']') (']')  
 
-attribute_list ::= attribute+ separator => <comma keyword> action => do_grammar # TODO: full specification
+attribute_list ::= attribute+ separator => <comma keyword>  # TODO: full specification
 
-attribute ::= attribute_token action => do_grammar
-    | attribute_token attribute_argument_clause action => do_grammar
+attribute ::= attribute_token 
+    | attribute_token attribute_argument_clause 
 
-attribute_token ::= identifier action => do_grammar # TODO: full definition
+attribute_token ::= identifier  # TODO: full definition
 
 attribute_argument_clause ::= ('(') (')') action => do_capture
-    | ('(') (')') action => do_grammar
+    | ('(') (')') 
 
-balanced_token_seq ::= balanced_token+ action => do_grammar
+balanced_token_seq ::= balanced_token+ 
 
 balanced_token ::= '(' balanced_token_seq ')' action => do_balanced_token
     | '[' balanced_token_seq ']' action => do_balanced_token
     | '{' balanced_token_seq '}' action => do_balanced_token
-    | token action => do_grammar # TODO: Change when tokens include grouping characters
+    | token  # TODO: Change when tokens include grouping characters
 
 # A.7 Declarators
-init_declarator_list ::= init_declarator+ separator => <comma keyword> action => do_grammar
+init_declarator_list ::= init_declarator+ separator => <comma keyword> 
 
-init_declarator ::= declarator action => do_grammar # TODO: Full definition
+init_declarator ::= declarator  # TODO: Full definition
 
 declarator ::=
-    ptr_declarator action => do_grammar # TODO: Full definition
-<optional declarator> ::= declarator action => do_grammar
-<optional declarator> ::= action => do_grammar
+    ptr_declarator  # TODO: Full definition
+<optional declarator> ::= declarator 
+<optional declarator> ::= 
 
 
-ptr_declarator ::= noptr_declarator action => do_grammar
-    | ptr_operator ptr_declarator action => do_grammar
+ptr_declarator ::= noptr_declarator 
+    | ptr_operator ptr_declarator 
 
-noptr_declarator ::= declarator_id action => do_grammar # TODO: Full definition
-    | noptr_declarator parameters_and_qualifiers action => do_grammar
+noptr_declarator ::= declarator_id  # TODO: Full definition
+    | noptr_declarator parameters_and_qualifiers 
 
 parameters_and_qualifiers ::=  # TODO: Full definition
-    ('(') parameter_declaration_clause (')') <optional noexcept_specifier> action => do_grammar
-    | ('(') (')') <optional noexcept_specifier> action => do_grammar
+    ('(') parameter_declaration_clause (')') <optional noexcept_specifier> 
+    | ('(') (')') <optional noexcept_specifier> 
 
 ptr_operator ::= '*' action => do_capture # TODO: Full definition
     | '&' action => do_capture
@@ -293,41 +292,41 @@ ptr_operator ::= '*' action => do_capture # TODO: Full definition
 
 cv_qualifier ::= <const keyword> action => do_capture | <volatile keyword> action => do_capture
 
-cv_qualifier_seq ::= cv_qualifier+ action => do_grammar
+cv_qualifier_seq ::= cv_qualifier+ 
 
-declarator_id ::= id_expression action => do_grammar 
-    | ellipses id_expression action => do_grammar
+declarator_id ::= id_expression  
+    | ellipses id_expression 
 
 type_id ::= type_specifier_seq action => pass_through # TODO: Full definition
 
 defining_type_id ::=                      # TODO: Full definition
-    defining_type_specifier_seq action => do_grammar
+    defining_type_specifier_seq 
 
 abstract_declarator ::=                   # TODO: Full definition
-      ptr_abstract_declarator action => do_grammar
-<optional abstract_declarator> ::= abstract_declarator action => do_grammar
-<optional abstract_declarator> ::= action => do_grammar
+      ptr_abstract_declarator 
+<optional abstract_declarator> ::= abstract_declarator 
+<optional abstract_declarator> ::= 
 
 
 ptr_abstract_declarator ::=
-      noptr_abstract_declarator action => do_grammar
-    | ptr_operator action => do_grammar
-    | ptr_operator ptr_abstract_declarator action => do_grammar
+      noptr_abstract_declarator 
+    | ptr_operator 
+    | ptr_operator ptr_abstract_declarator 
 
 noptr_abstract_declarator ::=             # TODO: Full definition
-      parameters_and_qualifiers action => do_grammar
+      parameters_and_qualifiers 
 
-parameter_declaration_clause ::= parameter_declaration_list action => do_grammar # TODO: Full definition
+parameter_declaration_clause ::= parameter_declaration_list  # TODO: Full definition
 
 parameter_declaration_list ::=                                # TODO: Full definition
-    parameter_declaration+ separator => <comma keyword> action => do_grammar
+    parameter_declaration+ separator => <comma keyword> 
 
 
 parameter_declaration ::=                                                       # TODO: Full definition
-      decl_specifier_seq declarator action => do_grammar # TODO: Full definition
-    | attribute_specifier_seq  decl_specifier_seq declarator action => do_grammar
-    | decl_specifier_seq <optional abstract_declarator> action => do_grammar
-    | attribute_specifier_seq decl_specifier_seq <optional abstract_declarator> action => do_grammar
+      decl_specifier_seq declarator  # TODO: Full definition
+    | attribute_specifier_seq  decl_specifier_seq declarator 
+    | decl_specifier_seq <optional abstract_declarator> 
+    | attribute_specifier_seq decl_specifier_seq <optional abstract_declarator> 
 
 # A.8 Classes
 class_key ::= <class keyword> action => do_capture
@@ -336,15 +335,15 @@ class_key ::= <class keyword> action => do_capture
 
 class_head ::= # todo: Full definition
     class_key <optional attribute_specifier_seq> class_head_name 
-           <optional class_virt_specifier> action => do_grammar
+           <optional class_virt_specifier> 
 
 class_head_name ::=     #todo: Full definition
-    class_name action => do_grammar
+    class_name 
 
 class_virt_specifier ::=
     <final keyword> action => do_capture
-<optional class_virt_specifier> ::= class_virt_specifier action => do_grammar
-<optional class_virt_specifier> ::= action => do_grammar
+<optional class_virt_specifier> ::= class_virt_specifier 
+<optional class_virt_specifier> ::= 
 
 # A.11 Overloading
 operator_function_id ::= (<operator keyword>) operator
@@ -360,57 +359,57 @@ operator_raw ::= <new keyword> | <delete keyword> | <new keyword> '[]' | <delete
 
 # A.12 Templates
 template_declaration      # todo: Full definition
-    ::= template_head declaration action => do_grammar
+    ::= template_head declaration 
 
 template_head             # todo: Full definition
-    ::= (<template keyword>) ('<') template_parameter_list ('>') action => do_grammar 
+    ::= (<template keyword>) ('<') template_parameter_list ('>')  
 
 template_parameter_list ::= 
-    template_parameter+ separator => <comma keyword> action => do_grammar
+    template_parameter+ separator => <comma keyword> 
 
-template_parameter ::= type_parameter action => do_grammar # TODO: Full definition
+template_parameter ::= type_parameter  # TODO: Full definition
 
-type_parameter ::= type_parameter_key action => do_grammar
-    | type_parameter_key ellipses action => do_grammar
-    | type_parameter_key identifier action => do_grammar
-    | type_parameter_key ellipses identifier action => do_grammar
-    | type_parameter_key ('=') type_id action => do_grammar
-    | type_parameter_key identifier ('=') type_id action => do_grammar
-    | template_head type_parameter_key action => do_grammar
-    | template_head type_parameter_key ellipses action => do_grammar
-    | template_head type_parameter_key identifier action => do_grammar
-    | template_head type_parameter_key ellipses identifier action => do_grammar
-    | type_parameter_key ('=') type_id action => do_grammar
-    | type_parameter_key identifier ('=') action => do_grammar
+type_parameter ::= type_parameter_key 
+    | type_parameter_key ellipses 
+    | type_parameter_key identifier 
+    | type_parameter_key ellipses identifier 
+    | type_parameter_key ('=') type_id 
+    | type_parameter_key identifier ('=') type_id 
+    | template_head type_parameter_key 
+    | template_head type_parameter_key ellipses 
+    | template_head type_parameter_key identifier 
+    | template_head type_parameter_key ellipses identifier 
+    | type_parameter_key ('=') type_id 
+    | type_parameter_key identifier ('=') 
 
 
 type_parameter_key ::= <class keyword> action => do_capture | <typename keyword> action => do_capture
 
-simple_template_id ::= template_name ('<') template_argument_list ('>') action => do_grammar
+simple_template_id ::= template_name ('<') template_argument_list ('>') 
 
 template_name ::= <ident> action => do_capture
 
-template_argument_list ::= template_argument* action => do_grammar # TODO: actions
+template_argument_list ::= template_argument*  # TODO: actions
 
 template_argument ::= type_id action => do_capture # TODO: Full definition
 
 explicit_specialization ::=
-    (<template keyword>) ('<') ('>') declaration action => do_grammar
+    (<template keyword>) ('<') ('>') declaration 
 
 # A.13 Exception handling
 noexcept_specifier ::= <noexcept keyword> action => do_capture # TODO: Full definition
-<optional noexcept_specifier> ::= noexcept_specifier action => do_grammar
-<optional noexcept_specifier> ::= action => do_grammar
+<optional noexcept_specifier> ::= noexcept_specifier 
+<optional noexcept_specifier> ::= 
 
 # A.14 Preprocessing directives
 control_line ::=  # TODO: Full definition
-    ('#define') identifier replacement_list  action => do_grammar
+    ('#define') identifier replacement_list  
 
 replacement_list ::= # TODO: Full definition (but seems unlikely this is worthwhile)
     RestOfLine action => do_capture
 
 identifier ::= <ident> action => do_capture
-    | standard_directive action => do_grammar
+    | standard_directive 
 
 standard_directive ::= ('@') non_at ('@') action => do_capture
 punctuation ::= <punctuation token> action => do_capture
@@ -568,7 +567,7 @@ sub parseCode {
     my $matches = 0;
     my $rank = -1000000;
     my $parse_tree;
-
+    
     do {
 	eval {
 	    $value_ref = $recce->value;
@@ -582,7 +581,6 @@ sub parseCode {
 	    }
 	};
     } while ($@ || $value_ref);
-
     return $parse_tree;
 }
 
@@ -638,6 +636,14 @@ sub insertXML {
 }
 
 my $grammar = Marpa::R2::Scanless::G->new( { source => \$dsl } );
+
+sub nonterminal {
+    my $rule_id     = $Marpa::R2::Context::rule;
+    my $slg         = $Marpa::R2::Context::slg;
+    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
+    $nonterminal=~s/_/-/g;
+    return $nonterminal;
+}
 
 sub extract_rank {
     my ($rank, undef, @ranked) = @_;
@@ -728,21 +734,15 @@ sub CodeProcess::do_grammar_1 {
     
 sub CodeProcess::do_capture {
     my (undef, @args) = @_;
-    my $rule_id     = $Marpa::R2::Context::rule;
-    my $slg         = $Marpa::R2::Context::slg;
-    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
-    $nonterminal=~s/_/-/g;
+    my $nonterminal = nonterminal();
     return [0, { $nonterminal => match_text() }];
 }
 
 sub CodeProcess::do_list {
     my ($rank, $deranked) = extract_rank (0, @_);
     my @args = @$deranked;
+    my $nonterminal = nonterminal();
 
-    my $rule_id     = $Marpa::R2::Context::rule;
-    my $slg         = $Marpa::R2::Context::slg;
-    my $nonterminal = $slg->symbol_display_form(($slg->rule_expand($rule_id))[0]);
-    $nonterminal=~s/_/-/g;
     if(scalar(@args) == 1) {
 	return [$rank, { $nonterminal => [$_[1]] }];
     }
@@ -1055,7 +1055,7 @@ namespace std {
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
-#    print Dumper($parse_tree);
+
     insertXML($doc, $parse_tree);
 	       });
  
