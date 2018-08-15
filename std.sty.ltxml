@@ -644,9 +644,11 @@ sub insertXML {
 		    $content = $$content{$childKey};
 		}
 	    }
-	    $doc->openElement('ltx:note', role => $key, @attributes);
+	    print "key:$key\n";
+	    my $optional = $key =~ /^<optional/;
+	    $doc->openElement('ltx:note', role => $key, @attributes) unless $optional;
 	    insertXML($doc, $content);
-	    $doc->closeElement('ltx:note');
+	    $doc->closeElement('ltx:note') unless $optional;
 	}
     }
 }
@@ -731,8 +733,6 @@ sub CodeProcess::do_grammar_inner {
     my ($rank, $deranked) = extract_rank (@_);
     my @args = @$deranked;
 	    
-    my $optional = ($nonterminal =~ /^<optional /);
-    
     if($is_quantitative->($rule_id)) {
 	my $arg0 = $args[0];
 	my ($key) = keys %$arg0;
@@ -742,7 +742,7 @@ sub CodeProcess::do_grammar_inner {
 	map { my $arg = $_; map { $result{$_} = $$arg{$_} } keys %$arg; } @args;
     }
     $result{match} = match_text();
-    return [$rank, $optional ? \%result : { $nonterminal => \%result }];
+    return [$rank, { $nonterminal => \%result }];
 }
 
 sub CodeProcess::do_grammar {
@@ -988,8 +988,19 @@ DefConstructor('\foo', sub {
 	       
     my $input = << 'EOF';
 namespace std {
+  using ptrdiff_t = @\seebelow@;
+  using size_t = @\seebelow@;
+  using max_align_t = @\seebelow@;
+  using nullptr_t = decltype(nullptr);
+
   enum class byte : unsigned char {};
+
+  template<class IntType>
+    constexpr byte operator<<(byte b, IntType shift) noexcept;
 }
+
+#define NULL @\seebelow@
+#define offsetof(P, D) @\seebelow@
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
