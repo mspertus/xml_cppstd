@@ -144,6 +144,7 @@ decl_specifier ::=
 
 decl_specifier_seq ::= decl_specifier+ action => do_decl_specifier_seq # TODO: Full definition
 
+
 storage_class_specifier ::= 
       <static keyword> action => do_capture
     | <thread_local keyword> action => do_capture
@@ -158,7 +159,8 @@ type_specifier ::=
 type_specifier_seq ::= type_specifier+ action => do_type_specifier_seq # TODO: Full definition
 
 defining_type_specifier ::= 
-      type_specifier  # TODO: Full definition
+      type_specifier 
+    | class_specifier
     | enum_specifier 
 
 defining_type_specifier_seq ::=      # TODO: Full definition
@@ -330,7 +332,7 @@ class_name ::=
     | simple_template_id 
 
 class_specifier ::=
-    class_head ('{') member_specification ('}') ';'
+    class_head ('{') <optional member_specification> ('}')
 
 class_head ::= # todo: Full definition
     class_key <optional attribute_specifier_seq> class_head_name 
@@ -349,9 +351,39 @@ class_key ::= <class keyword> action => do_capture
     | <union keyword> action => do_capture
 
 member_specification ::=
-    'foo'
+    <hidden member_declaration>+
+<optional member_specification> ::= member_specification
+<optional member_specification> ::= 
 
 <hidden member_declaration> ::=
+    member_declaration
+    | access_specifier ':'
+
+member_declaration ::=   # todo: Full definition
+    member_declarator_list ';'  # TODO: This can only occur for constructor/destructor/conversion function class.mem/11
+    | decl_specifier_seq <optional member_declarator_list> ';'
+
+member_declarator_list ::=
+    member_declarator+ separator => <comma keyword>
+<optional member_declarator_list> ::= member_declarator_list
+<optional member_declarator_list> ::= 
+
+member_declarator ::=       # todo: Full definition
+    declarator <optional virt_specifier_seq> <optional pure_specifier>
+
+virt_specifier_seq ::=
+    virt_specifier+
+<optional virt_specifier_seq> ::= virt_specifier_seq
+<optional virt_specifier_seq> ::= 
+
+virt_specifier ::=
+      <override keyword>
+    | <final keyword>
+ 
+pure_specifier ::= 
+    ('= 0')
+<optional pure_specifier> ::= pure_specifier
+<optional pure_specifier> ::= 
   
 # A.9 Derived classes
 access_specifier ::=
@@ -501,6 +533,9 @@ enum ::= <enum keyword> action => do_capture
 
 :lexeme ~ <operator keyword> priority => 1
 <operator keyword> ~ 'operator'
+
+:lexeme ~ <override keyword> priority => 1
+<override keyword> ~ 'override'
 
 :lexeme ~ <private keyword> priority => 1
 <private keyword> ~ 'private'
@@ -1029,10 +1064,7 @@ DefConstructor('\foo', sub {
     print "Running style file\n\n\n";
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
-    my $input = << 'EOF';
-int i;
-int j;
-EOF
+    my $input = 'class Foo {};';
 
     my $parse_tree = parseCode($grammar, $input);
 
