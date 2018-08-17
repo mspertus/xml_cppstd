@@ -93,15 +93,7 @@ unqualified_id ::=         # todo: Full definition
     | operator_function_id
 
 # A.6 Declarations
-declaration_seq ::=
-      deferred_with_braces                       rank => 2 action => do_deferred
-    | comment                                    rank => 1 action => do_deferred 
-    | deferred_preprocessor                               rank => 1 action => do_deferred
-    | deferred_semi_delimited                    action => do_deferred
-    | declaration_seq deferred_with_braces         rank => 2 action => do_deferred_seq
-    | declaration_seq comment                    rank => 1 action => do_deferred_seq
-    | declaration_seq deferred_preprocessor      rank => 1 action => do_deferred_seq
-    | declaration_seq deferred_semi_delimited    action => do_deferred_seq
+declaration_seq ::= <deferred declaration>+
 
 deferred_namespace ::=
     <namespace keyword> identifier '{' brace_balanced '}' action => do_capture
@@ -110,7 +102,10 @@ deferred_preprocessor ::=
     '#' RestOfLine action => do_capture
 
 <deferred declaration> ::=
-    deferred_semi_delimited 
+      deferred_semi_delimited
+    | deferred_with_braces
+    | comment
+    | control_line
     
 declaration ::=                # TODO: Correct definition
       block_declaration 
@@ -605,11 +600,18 @@ my $doc;
 
 my $eager_grammar = Marpa::R2::Scanless::G->new( { source => \($eager_start.$dsl) } );
 
+sub DslAs {
+    my($start_symbol) = @_;
+    return ":start ::= $start_symbol\n$dsl";
+}
+
 sub parseCode {
     my ($grammar, $input) = @_;
     $recce = Marpa::R2::Scanless::R->new(
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
+    print "input: $input\n";
     my $length_read = $recce->read( \$input );
+    print "\n", $recce->show_progress(0, -1);
     my $value_ref;
     my $matches = 0;
     my $rank = -1000000;
@@ -627,6 +629,7 @@ sub parseCode {
 		}
 	    }
 	};
+	print $@;
     } while ($@ || $value_ref);
     return $parse_tree;
 }
@@ -644,13 +647,6 @@ sub insertXML {
     }
 
     foreach my $key (keys %$tree) {
-	if($key =~ /^deferred/) {
-	    foreach my $deferred (@{$$tree{$key}}) {
-		my $parse_tree = parseCode($eager_grammar, $deferred);
-		insertXML($doc, $parse_tree);
-	    }
-	    next;
-	}
 	my $content = $$tree{$key};
 	if(ref($content) eq "ARRAY") {
 	    foreach my $value (@$content) {
@@ -662,9 +658,7 @@ sub insertXML {
 			$value = $$value{$childKey};
 		    }
 		}
-		$doc->openElement('ltx:note', role => $key, @attributes);
-		insertXML($doc, $value);
-		$doc->closeElement('ltx:note');
+		insertXML($doc, { $key => $value });
 	    }
 	} else {
 	    my @attributes;
@@ -675,10 +669,17 @@ sub insertXML {
 		    $content = $$content{$childKey};
 		}
 	    }
-	    my $optional = $key =~ /^<optional/;
-	    $doc->openElement('ltx:note', role => $key, @attributes) unless $optional;
-	    insertXML($doc, $content);
-	    $doc->closeElement('ltx:note') unless $optional;
+	    if($key =~ /^<deferred (\w+)/) {
+		$doc->openElement('ltx:note', role => $1, @attributes);
+		my $parse_tree = parseCode($eager_grammar, $$content{match});
+		insertXML($doc, $parse_tree);
+		$doc->closeElement('ltx:note');
+	    } else {
+		my $optional = $key =~ /^<optional/;
+		$doc->openElement('ltx:note', role => $key, @attributes) unless $optional;
+		insertXML($doc, $content);
+		$doc->closeElement('ltx:note') unless $optional;
+	    }
 	}
     }
 }
@@ -695,7 +696,7 @@ sub nonterminal {
 
 sub extract_rank {
     my ($rank, undef, @ranked) = @_;
-    print nonterminal().": ".Dumper(@_);
+
     my @deranked = map { my ($r, $i) = @$_; $rank += $r; $i } @ranked;
     return ($rank, \@deranked);
 };
@@ -1019,11 +1020,12 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-foo{}
-bar{}
+int i;
+int j;
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
+    print Dumper($parse_tree);	       
     insertXML($doc, $parse_tree);
 	       });
  
