@@ -77,11 +77,6 @@ lexeme default = latm => 1
 
 comment ::= '//' (RestOfLine) action => do_capture
 
-# A.1 Keywords
-class_name ::=
-      identifier 
-    | simple_template_id 
-
 # A.2 Lexical Conventions
 token ::= identifier  # TODO: Full definition and propagate changes to balanced_token
     | operator 
@@ -98,15 +93,15 @@ unqualified_id ::=         # todo: Full definition
     | operator_function_id
 
 # A.6 Declarations
-declaration_seq ::= 
-      deferred_namespace                               rank => 2 action => do_deferred
-    | comment                                          rank => 1 action => do_deferred 
-    | deferred_preprocessor                            rank => 1 action => do_deferred
-    | deferred_semi_delimited                                    action => do_deferred
-    | declaration_seq deferred_namespace      rank => 2 action => do_deferred_seq
-    | declaration_seq comment                 rank => 1 action => do_deferred_seq
-    | declaration_seq deferred_preprocessor   rank => 1 action => do_deferred_seq
-    | declaration_seq deferred_semi_delimited           action => do_deferred_seq
+declaration_seq ::=
+      deferred_with_braces                       rank => 2 action => do_deferred
+    | comment                                    rank => 1 action => do_deferred 
+    | deferred_preprocessor                               rank => 1 action => do_deferred
+    | deferred_semi_delimited                    action => do_deferred
+    | declaration_seq deferred_with_braces         rank => 2 action => do_deferred_seq
+    | declaration_seq comment                    rank => 1 action => do_deferred_seq
+    | declaration_seq deferred_preprocessor      rank => 1 action => do_deferred_seq
+    | declaration_seq deferred_semi_delimited    action => do_deferred_seq
 
 deferred_namespace ::=
     <namespace keyword> identifier '{' brace_balanced '}' action => do_capture
@@ -114,10 +109,9 @@ deferred_namespace ::=
 deferred_preprocessor ::=
     '#' RestOfLine action => do_capture
 
-deferred_semi_delimited ::= non_semis ';' action => do_capture
-non_semis ::= non_semi+ action => pass_through
-non_semi ::= punctuation | <ident> action => pass_through
-
+<deferred declaration> ::=
+    deferred_semi_delimited 
+    
 declaration ::=                # TODO: Correct definition
       block_declaration 
     | template_declaration 
@@ -336,9 +330,12 @@ parameter_declaration ::=                                                       
     | attribute_specifier_seq decl_specifier_seq <optional abstract_declarator> 
 
 # A.8 Classes
-class_key ::= <class keyword> action => do_capture
-    | <struct keyword> action => do_capture
-    | <union keyword> action => do_capture
+class_name ::=
+      identifier 
+    | simple_template_id 
+
+class_specifier ::=
+    class_head ('{') member_specification ('}') ';'
 
 class_head ::= # todo: Full definition
     class_key <optional attribute_specifier_seq> class_head_name 
@@ -351,6 +348,21 @@ class_virt_specifier ::=
     <final keyword> action => do_capture
 <optional class_virt_specifier> ::= class_virt_specifier 
 <optional class_virt_specifier> ::= 
+
+class_key ::= <class keyword> action => do_capture
+    | <struct keyword> action => do_capture
+    | <union keyword> action => do_capture
+
+member_specification ::=
+    'foo'
+
+<hidden member_declaration> ::=
+  
+# A.9 Derived classes
+access_specifier ::=
+      <private keyword>
+    | <protected keyword>
+    | <public keyword>
 
 # A.11 Overloading
 operator_function_id ::= (<operator keyword>) operator
@@ -495,6 +507,15 @@ enum ::= <enum keyword> action => do_capture
 :lexeme ~ <operator keyword> priority => 1
 <operator keyword> ~ 'operator'
 
+:lexeme ~ <private keyword> priority => 1
+<private keyword> ~ 'private'
+
+:lexeme ~ <protected keyword> priority => 1
+<protected keyword> ~ 'protected'
+
+:lexeme ~ <public keyword> priority => 1
+<public keyword> ~ 'public'
+
 :lexeme ~ <short keyword> priority => 1
 <short keyword> ~ 'short'
 
@@ -542,6 +563,12 @@ enum ::= <enum keyword> action => do_capture
 :lexeme ~ <ellipses keyword> priority => 1
 <ellipses keyword> ~ '...'
 
+# For deferring ambiguous parses
+deferred_with_braces ::= non_braces_or_semi '{' brace_balanced '}' action => do_capture
+deferred_semi_delimited ::= non_semis ';' action => do_capture
+non_semis ::= non_semi+ action => pass_through
+non_semi ::= punctuation | <ident> action => pass_through
+
 brace_balanced ::= 
       non_braces action => do_capture
     | '{' brace_balanced '}' action => do_capture
@@ -550,8 +577,12 @@ brace_balanced ::=
     | non_braces '{' brace_balanced '}' brace_balanced action => do_capture
 brace_balanced ::=
 
+<optional semi> ::= ';' action => pass_through
+<optional semi> ::= action => pass_through
 
-non_braces ~ [^{}]+
+non_braces ::= non_braces_maybe_semi+ action => do_capture
+non_braces_maybe_semi ::= non_braces_or_semi | ';'
+non_braces_or_semi ~ [^{};\s]+
 
 # See https://stackoverflow.com/questions/25800789/discard-and-skip-over-unstructured-text-with-perl-marpa
 RestOfLine
@@ -644,7 +675,6 @@ sub insertXML {
 		    $content = $$content{$childKey};
 		}
 	    }
-	    print "key:$key\n";
 	    my $optional = $key =~ /^<optional/;
 	    $doc->openElement('ltx:note', role => $key, @attributes) unless $optional;
 	    insertXML($doc, $content);
@@ -665,6 +695,7 @@ sub nonterminal {
 
 sub extract_rank {
     my ($rank, undef, @ranked) = @_;
+    print nonterminal().": ".Dumper(@_);
     my @deranked = map { my ($r, $i) = @$_; $rank += $r; $i } @ranked;
     return ($rank, \@deranked);
 };
@@ -680,6 +711,7 @@ sub CodeProcess::do_deferred_seq {
 }
  
 sub CodeProcess::do_dump {
+    print "**************************\n";
     print "matched: ".Dumper(@_)."\n";
     my $result = CodeProcess::do_grammar(@_);
     print "result: ".Dumper($result);
@@ -987,24 +1019,11 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = << 'EOF';
-namespace std {
-  using ptrdiff_t = @\seebelow@;
-  using size_t = @\seebelow@;
-  using max_align_t = @\seebelow@;
-  using nullptr_t = decltype(nullptr);
-
-  enum class byte : unsigned char {};
-
-  template<class IntType>
-    constexpr byte operator<<(byte b, IntType shift) noexcept;
-}
-
-#define NULL @\seebelow@
-#define offsetof(P, D) @\seebelow@
+foo{}
+bar{}
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
-    print Dumper($parse_tree);
     insertXML($doc, $parse_tree);
 	       });
  
