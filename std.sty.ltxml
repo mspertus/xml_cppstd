@@ -600,18 +600,28 @@ my $doc;
 
 my $eager_grammar = Marpa::R2::Scanless::G->new( { source => \($eager_start.$dsl) } );
 
+my %grammars;
+
 sub DslAs {
     my($start_symbol) = @_;
     return ":start ::= $start_symbol\n$dsl";
 }
 
+sub grammarFrom {
+    my ($start_symbol) = @_;
+    if (!exists($grammars{$start_symbol})) {
+	$grammars{$start_symbol} =  Marpa::R2::Scanless::G->new( { source => \DslAs($start_symbol) });
+    }
+    return $grammars{$start_symbol};
+}
+
+
 sub parseCode {
     my ($grammar, $input) = @_;
     $recce = Marpa::R2::Scanless::R->new(
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
-    print "input: $input\n";
+
     my $length_read = $recce->read( \$input );
-    print "\n", $recce->show_progress(0, -1);
     my $value_ref;
     my $matches = 0;
     my $rank = -1000000;
@@ -671,7 +681,7 @@ sub insertXML {
 	    }
 	    if($key =~ /^<deferred (\w+)/) {
 		$doc->openElement('ltx:note', role => $1, @attributes);
-		my $parse_tree = parseCode($eager_grammar, $$content{match});
+		my $parse_tree = parseCode(grammarFrom($1), $$content{match});
 		insertXML($doc, $parse_tree);
 		$doc->closeElement('ltx:note');
 	    } else {
@@ -1025,7 +1035,7 @@ int j;
 EOF
 
     my $parse_tree = parseCode($grammar, $input);
-    print Dumper($parse_tree);	       
+
     insertXML($doc, $parse_tree);
 	       });
  
