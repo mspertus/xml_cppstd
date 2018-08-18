@@ -654,7 +654,7 @@ sub grammarFrom {
 
 sub parseCode {
     my ($grammar, $input) = @_;
-    print "parsing:\n$input\n";
+    # print "parsing:\n$input\n";
     $recce = Marpa::R2::Scanless::R->new(
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
@@ -684,7 +684,7 @@ sub parseCode {
 
 sub insertXML {
     my ($doc, $tree) = @_;
-    print "InsertXML: ".Dumper($tree);
+    # print "InsertXML: ".Dumper($tree);
     my $ignore = 0;
     if(ref($tree) eq "") {
 	$doc->absorb($tree);
@@ -719,14 +719,13 @@ sub insertXML {
 		}
 	    }
 	    if($key =~ /^<deferred (\w+)/) {
-		print "deferring $1\n";
 		my $parse_tree = parseCode(grammarFrom($1), $$content{match});
 		insertXML($doc, $parse_tree);
 	    } else {
-		my $optional = $key =~ /^<optional/;
-		$doc->openElement('ltx:note', role => $key, @attributes) unless $optional;
+		my $hidden = $key =~ /^<optional/ || $key =~ /^<hidden/;
+		$doc->openElement('ltx:note', role => $key, @attributes) unless $hidden;
 		insertXML($doc, $content);
-		$doc->closeElement('ltx:note') unless $optional;
+		$doc->closeElement('ltx:note') unless $hidden;
 	    }
 	}
     }
@@ -980,7 +979,6 @@ sub CodeProcess::do_balanced_token {
 
 # A.11 Overloading
 sub CodeProcess::do_operator {
-    print "in operator";
     my (undef, @args) = @_;
     my $args0 = $args[0];
     my (undef, @tokens) = @$args0;
@@ -1065,7 +1063,7 @@ DefConstructor('\testConst {} {}',
 DefConstructor('\foo', sub {
     $doc = $_[0];
     print "Running style file\n\n\n";
-    my $grammar = Marpa::R2::Scanless::G->new( { source => \($eager_start.$dsl) } );
+    my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = <<'EOF';
   struct destroying_delete_t {
@@ -1074,7 +1072,7 @@ DefConstructor('\foo', sub {
 EOF
 
 	       my $parse_tree = parseCode($grammar, $input);
-	       print "About to insert: \n".Dumper($parse_tree);
+	       # print "About to insert: \n".Dumper($parse_tree);
 	       insertXML($doc, $parse_tree);
 	       });
  
