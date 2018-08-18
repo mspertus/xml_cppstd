@@ -71,7 +71,7 @@ sub match_text {
 my $lazy_start = ":start ::= declaration_seq\n";
 my $eager_start = ":start ::= declaration\n";
     
-my $dsl = <<'END_OF_DSL';
+my $pre_dsl = <<'END_OF_DSL';
 :default ::= action => do_grammar
 lexeme default = latm => 1
 
@@ -319,7 +319,6 @@ parameter_declaration_clause ::= parameter_declaration_list  # TODO: Full defini
 parameter_declaration_list ::=                                # TODO: Full definition
     parameter_declaration+ separator => <comma keyword> 
 
-
 parameter_declaration ::=                                                       # TODO: Full definition
       decl_specifier_seq declarator  # TODO: Full definition
     | attribute_specifier_seq  decl_specifier_seq declarator 
@@ -463,131 +462,6 @@ ellipses ::= (<ellipses keyword>) action => do_capture
 <punctuation token> ~ [^\s\w;] # TODO: This is all wrong
 non_at ~ [^@]+
 
-# Keywords
-:lexeme ~ <auto keyword> priority => 1
-<auto keyword> ~ 'auto'
-
-:lexeme ~ <bool keyword> priority => 1
-<bool keyword> ~ 'bool'
-
-:lexeme ~ <char keyword> priority => 1
-<char keyword> ~ 'char'
-
-:lexeme ~ <char16_t keyword> priority => 1
-<char16_t keyword> ~ 'char16_t'
-
-:lexeme ~ <char32_t keyword> priority => 1
-<char32_t keyword> ~ 'char32_t'
-
-:lexeme ~ <class keyword> priority => 1
-<class keyword> ~ 'class'
-
-:lexeme ~ <const keyword> priority => 1
-<const keyword> ~ 'const'
-
-:lexeme ~ <constexpr keyword> priority => 1
-<constexpr keyword> ~ 'constexpr'
-
-:lexeme ~ <delete keyword> priority => 1
-<delete keyword> ~ 'delete'
-
-:lexeme ~ <double keyword> priority => 1
-<double keyword> ~ 'double'
-
-enum ::= <enum keyword> action => do_capture
-:lexeme ~ <enum keyword> priority => 1
-<enum keyword> ~ 'enum'
-
-:lexeme ~ <extern keyword> priority => 1
-<extern keyword> ~ 'extern'
-
-:lexeme ~ <final keyword> priority => 1
-<final keyword> ~ 'final'
-
-:lexeme ~ <float keyword> priority => 1
-<float keyword> ~ 'float'
-
-:lexeme ~ <friend keyword> priority => 1
-<friend keyword> ~ 'friend'
-
-:lexeme ~ <inline keyword> priority => 1
-<inline keyword> ~ 'inline'
-
-:lexeme ~ <int keyword> priority => 1
-<int keyword> ~ 'int'
-
-:lexeme ~ <long keyword> priority => 1
-<long keyword> ~ 'long'
-
-:lexeme ~ <mutable keyword> priority => 1
-<mutable keyword> ~ 'mutable'
-
-:lexeme ~ <namespace keyword> priority => 1
-<namespace keyword> ~ 'namespace'
-
-:lexeme ~ <new keyword> priority => 1
-<new keyword> ~ 'new'
-
-:lexeme ~ <noexcept keyword> priority => 1
-<noexcept keyword> ~ 'noexcept'
-
-:lexeme ~ <operator keyword> priority => 1
-<operator keyword> ~ 'operator'
-
-:lexeme ~ <override keyword> priority => 1
-<override keyword> ~ 'override'
-
-:lexeme ~ <private keyword> priority => 1
-<private keyword> ~ 'private'
-
-:lexeme ~ <protected keyword> priority => 1
-<protected keyword> ~ 'protected'
-
-:lexeme ~ <public keyword> priority => 1
-<public keyword> ~ 'public'
-
-:lexeme ~ <short keyword> priority => 1
-<short keyword> ~ 'short'
-
-:lexeme ~ <signed keyword> priority => 1
-<signed keyword> ~ 'signed'
-
-:lexeme ~ <static keyword> priority => 1
-<static keyword> ~ 'static'
-
-:lexeme ~ <struct keyword> priority => 1
-<struct keyword> ~ 'struct'
-
-:lexeme ~ <template keyword> priority => 1
-<template keyword> ~ 'template'
-
-:lexeme ~ <thread_local keyword> priority => 1
-<thread_local keyword> ~ 'thread_local'
-
-:lexeme ~ <typedef keyword> priority => 1
-<typedef keyword> ~ 'typedef'
-
-:lexeme ~ <typename keyword> priority => 1
-<typename keyword> ~ 'typename'
-
-:lexeme ~ <union keyword> priority => 1
-<union keyword> ~ 'union'
-
-:lexeme ~ <unsigned keyword> priority => 1
-<unsigned keyword> ~ 'unsigned'
-
-:lexeme ~ <using keyword> priority => 1
-<using keyword> ~ 'using'
-
-:lexeme ~ <void keyword> priority => 1
-<void keyword> ~ 'void'
-
-:lexeme ~ <volatile keyword> priority => 1
-<volatile keyword> ~ 'volatile'
-
-:lexeme ~ <wchar_t keyword> priority => 1
-<wchar_t keyword> ~ 'wchar_t'
-
 <comma keyword> ~ ','
 
 :lexeme ~ <ellipses keyword> priority => 1
@@ -629,11 +503,22 @@ whitespace ~ [\s]+
 
 :discard ~ itcorr_minus_one
 itcorr_minus_one ~ '@\itcorr[-1]@' 
+
 END_OF_DSL
 
+my $keywords = join("", map { qq{
+		     :lexeme ~ <$_ keyword> priority => 1
+			 <$_ keyword> ~ '$_'
+		     }
+} qw(auto bool char char16_t char32_t class const constexpr
+     delete double enum extern final float friend inline
+     int long mutable namespace new noexcept operator override
+     private protected public short signed static struct
+     template thread_local typedef typename union unsigned
+     using void volatile wchar_t));
 
 my $doc;
-
+my $dsl = $pre_dsl.$keywords;
 my $eager_grammar = Marpa::R2::Scanless::G->new( { source => \($eager_start.$dsl) } );
 
 my %grammars;
@@ -1067,7 +952,7 @@ DefConstructor('\foo', sub {
 	       
     my $input = <<'EOF';
   struct destroying_delete_t {
-    int f();
+    explicit destroying_delete_t();
   };
 EOF
 
