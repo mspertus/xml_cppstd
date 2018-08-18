@@ -303,6 +303,8 @@ ptr_abstract_declarator ::=
 
 noptr_abstract_declarator ::=             # TODO: Full definition
       parameters_and_qualifiers 
+    | noptr_abstract_declarator parameters_and_qualifiers
+    | ('(') ptr_abstract_declarator (')')
 
 parameter_declaration_clause ::= parameter_declaration_list  # TODO: Full definition
 
@@ -952,9 +954,7 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = <<'EOF';
-struct destroying_delete_t {
-    explicit destroying_delete_t() = default;
-};
+  using new_handler = void (*)();
 EOF
 
 	       # my $parse_tree = parseCode(grammarFrom("function_definition"), $input);
