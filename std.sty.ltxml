@@ -542,7 +542,7 @@ sub parseCode {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $length_read = $recce->read( \$input );
-    # print "$input\n", $recce->show_progress(0, -1);
+#    print "$input\n", $recce->show_progress(0, -1);
     my $value_ref;
     my $matches = 0;
     my $rank = -1000000;
@@ -747,10 +747,13 @@ sub CodeProcess::do_decl_specifier_seq {
     my %counts = ( long => 0);
     my $non_cv_defining_type_specifier_seen = 0;
   
-    # The rules in dc.spec/3 seem too restrictive. Using dcl.type/2 instead
-    validate_type_specifier_seq (
-	grep { ref($_) eq 'HASH' and exists($$_{'defining-type-specifier'}) } @decl_specifiers);
-    
+    my @defining_type_specifiers = grep { ref($_) eq 'HASH' and exists($$_{'defining-type-specifier'}) } @decl_specifiers;
+    # TODO: Validate that we have a type unless this is a constructor etc.
+    # The rules in dclspec/3 seem too restrictive. Using dcl.type/2 instead
+    if(@defining_type_specifiers) {
+	validate_type_specifier_seq (@defining_type_specifiers);
+    }
+
     foreach (@decl_specifiers) {
 	$counts{ref($_) eq 'HASH' ? $$_{match} : $_}++;
     }
@@ -949,13 +952,13 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = <<'EOF';
- struct destroying_delete_t {
-    destroying_delete_t() = default;
+struct destroying_delete_t {
+    explicit destroying_delete_t() = default;
 };
 EOF
 
+	       # my $parse_tree = parseCode(grammarFrom("function_definition"), $input);
 	       my $parse_tree = parseCode($grammar, $input);
-	       # print "About to insert: \n".Dumper($parse_tree);
 	       insertXML($doc, $parse_tree);
 	       });
  
