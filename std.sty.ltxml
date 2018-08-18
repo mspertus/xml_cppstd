@@ -137,6 +137,7 @@ simple_declaration ::= decl_specifier_seq (';')
 decl_specifier ::= 
       storage_class_specifier  # todo: Full definition
     | defining_type_specifier
+    | function_specifier action => do_grammar_1
     | <friend keyword>
     | <typedef keyword>
     | <constexpr keyword>
@@ -150,6 +151,10 @@ storage_class_specifier ::=
     | <thread_local keyword> action => do_capture
     | <extern keyword> action => do_capture
     | <mutable keyword> action => do_capture
+
+function_specifier ::=
+      <virtual keyword>
+    | <explicit keyword>
 
 type_specifier ::= 
       simple_type_specifier  # TODO: Full definition
@@ -310,6 +315,15 @@ parameter_declaration ::=                                                       
     | decl_specifier_seq <optional abstract_declarator> 
     | attribute_specifier_seq decl_specifier_seq <optional abstract_declarator> 
 
+function_definition ::=               # todo: Full definition
+      declarator <optional virt_specifier_seq> function_body
+    | decl_specifier_seq declarator <optional virt_specifier_seq> function_body
+    | attribute_specifier_seq <optional decl_specifier_seq> declarator <optional virt_specifier_seq> function_body
+
+function_body ::=              # todo: Full definition
+      ('=') <default keyword> (';')
+    | ('=') <delete keyword> (';')
+
 # A.8 Classes
 class_name ::=
       identifier 
@@ -340,8 +354,9 @@ member_specification ::=
     | access_specifier ':'
 
 member_declaration ::=   # todo: Full definition
-    member_declarator_list ';'  # TODO: This can only occur for constructor/destructor/conversion function class.mem/11
+    member_declarator_list ';' # TODO: This can only occur for constructor/destructor/conversion function class.mem/11
     | decl_specifier_seq <optional member_declarator_list> (';')
+    | function_definition
 
 member_declarator_list ::=
     member_declarator+ separator => <comma keyword>
@@ -484,20 +499,20 @@ my $keywords = join("", map { qq{
 			 <$_ keyword> ~ '$_'
 		     }
 } qw(auto bool char char16_t char32_t class const constexpr
-     delete double enum extern final float friend inline
+     default delete double enum explicit extern final float friend inline
      int long mutable namespace new noexcept operator override
      private protected public short signed static struct
      template thread_local typedef typename union unsigned
-     using void volatile wchar_t));
+     using virtual void volatile wchar_t));
 
 my $optional_symbols= join("", map { qq{
 		     <optional $_> ::= $_
 		     <optional $_> ::=
 		     }
-} qw(enum_head enum_head_name enum_base attribute_specifier_seq declarator
-     abstract_declarator class_virt_specifier member_specification
-     member_declarator_list virt_specifier_seq pure_specifier
-     noexcept_specifier));
+} qw(abstract_declarator attribute_specifier_seq class_virt_specifier
+     decl_specifier_seq declarator enum_base enum_head enum_head_name
+     member_declarator_list member_specification noexcept_specifier pure_specifier
+     virt_specifier_seq));
     
 my $doc;
 my $dsl = "$pre_dsl\n$optional_symbols\n$keywords;";
@@ -527,7 +542,7 @@ sub parseCode {
 	{ grammar => $grammar, semantics_package => 'CodeProcess', ranking_method => 'rule' } );
 
     my $length_read = $recce->read( \$input );
-#    print "$input\n", $recce->show_progress(0, -1);
+    # print "$input\n", $recce->show_progress(0, -1);
     my $value_ref;
     my $matches = 0;
     my $rank = -1000000;
@@ -934,9 +949,9 @@ DefConstructor('\foo', sub {
     my $grammar = Marpa::R2::Scanless::G->new( { source => \($lazy_start.$dsl) } );
 	       
     my $input = <<'EOF';
-  struct destroying_delete_t {
-    explicit destroying_delete_t();
-  };
+ struct destroying_delete_t {
+    destroying_delete_t() = default;
+};
 EOF
 
 	       my $parse_tree = parseCode($grammar, $input);
