@@ -894,6 +894,7 @@ DefConstructor('\@@listings@block {} {}',
 		       $input =~ s/@\\seebelow@/\@see below\@/g;
 		       $input =~ s/@\\placeholder\{([^}]*)\}@/\@$1\@/g;
 		       $input =~ s/@\\placeholdernc\{([^}]*)\}@/\@$1\@/g;
+		       $input =~ s/@\\itcorr\[-1\]@/ /g;
 		       $input =~ s/\\expos/\@exposition only\@/g;
 		       $doc = $document;
 		       
@@ -1042,6 +1043,7 @@ EOF
 	       $input =~ s/@\\seebelow@/\@see below\@/g;
 	       $input =~ s/@\\placeholder\{([^}]*)\}@/\@$1\@/g;
 	       $input =~ s/@\\placeholdernc\{([^}]*)\}@/\@$1\@/g;
+	       $input =~ s/@\\itcorr\[-1\]@/ /g;
  	       $input =~ s/\\expos/\@exposition only\@/g;
 
 	       # my $parse_tree = parseCode(grammarFrom("function_definition"), $input);
