@@ -1,4 +1,4 @@
-# -*- mode: Perl -*-
+# -*- Perl -*-
 # /=====================================================================\ #
 # |  std                                                           | #
 # | Implementation for LaTeXML                                          | #
@@ -21,7 +21,7 @@ use Data::Dumper;
 use Tie::IxHash;
 
 LoadPool('LaTeX');
-# RequirePackage('listings');
+RequirePackage('listings');
 
 DefMacro('\Cpp', 'C++');
 NewCounter('InHeader');
@@ -721,7 +721,7 @@ sub CodeProcess::do_grammar_1 {
 sub CodeProcess::do_capture {
     my (undef, @args) = @_;
     my $nonterminal = nonterminal();
-    return [0, { $nonterminal => match_text() }];
+    return [0, { $nonterminal => {match => match_text()} }];
 }
 
 sub CodeProcess::do_list {
@@ -890,25 +890,21 @@ DefConstructor('\@@listings@block {} {}',
 		   if($inHeader) {
 		       my $headerName = $props{headerName};
 		       my $data_key      = 'LISTINGS_DATA_' . ToString($index);
-		       my $listings_data = LookupValue($data_key);
+		       my $input = LookupValue($data_key);
+		       $input =~ s/@\\seebelow@/\@see below\@/g;
+		       $input =~ s/@\\placeholder\{([^}]*)\}@/\@$1\@/g;
+		       $input =~ s/@\\placeholdernc\{([^}]*)\}@/\@$1\@/g;
+		       $input =~ s/\\expos/\@exposition only\@/g;
 		       $doc = $document;
 		       
 		       # print 'Dumping\n'.Dumper($value_ref);
 		       print "HeaderName: $headerName\n";
-		       $document->openElement('ltx:note', role => 'header', class => $headerName);
-		       # my $value_ref = $grammar->parse( \$listings_data, 'CodeProcess');
-		       $recce = Marpa::R2::Scanless::R->new( { grammar => $grammar,
-							       semantics_package => 'CodeProcess',
-							     ranking_method => 'rule' } );
-		       my $length_read = $recce->read( \$listings_data );
-		       my $value_ref;
-		       do {
-			   eval {
-			       $value_ref = $recce->value;
-			   };
-		       } while ($@);
-		       insertXML($doc, $$value_ref);
-		       $document->closeElement('ltx:note');
+		       if($input) {
+			   $document->openElement('ltx:note', role => 'header', class => $headerName);
+			   my $parse_tree = parseCode(grammarFrom("declaration_seq"), $input);
+			   insertXML($doc, $parse_tree);
+			   $document->closeElement('ltx:note');
+		       }
 		   }
 		   $document->insertElement('ltx:listing',
 					    $content,

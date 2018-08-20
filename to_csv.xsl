@@ -30,11 +30,11 @@ header, type, name, text
 <xsl:apply-templates/>    
   </xsl:template>
   
-  <xsl:template match="class|class-template|class-template-specialization|macro|type-alias|enum-class|enum"
+  <xsl:template match="class|class-template|class-template-specialization|macro|type-alias|enum-class|enum|function"
 		><xsl:value-of select="ancestor::header/@name"
 		/>,<xsl:call-template name="split"><xsl:with-param name="pText"><xsl:value-of select ="name(.)"/></xsl:with-param></xsl:call-template
 		>,<xsl:if test="name(.)='class-template-specialization'"><xsl:text>  </xsl:text></xsl:if><xsl:value-of select="@name"
-		/>,"<xsl:value-of select="text"/>"
+		/>,"<xsl:value-of select="match"/>"
 <xsl:apply-templates/>
 </xsl:template>
   
